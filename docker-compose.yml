@@ -9,11 +9,10 @@ services:
       - "3001:3000"          # Remove this if you're using Nginx Proxy Manager
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+    env_file:
+      - .env
     environment:
       PORT: 3000
-      JWT_SECRET: "${JWT_SECRET}"
-      PANEL_USERNAME: "${PANEL_USERNAME:-admin}"
-      PANEL_PASSWORD_HASH: "${PANEL_PASSWORD_HASH}"
 
 # ── Nginx Proxy Manager integration ─────────────────────────────────────────
 # If you use NPM, uncomment the lines below and remove the "ports" mapping above.
