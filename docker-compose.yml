@@ -11,11 +11,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       PORT: 3000
-      JWT_SECRET: "change-this-to-a-long-random-string"
-      PANEL_USERNAME: "admin"
-      # Generate with: docker exec mcpanel node -e "console.log(require('bcryptjs').hashSync('yourpassword', 12))"
-      # or: npm run hash yourpassword
-      PANEL_PASSWORD_HASH: ""   # Leave empty to use default "admin" password — CHANGE THIS
+      JWT_SECRET: "${JWT_SECRET}"
+      PANEL_USERNAME: "${PANEL_USERNAME:-admin}"
+      PANEL_PASSWORD_HASH: "${PANEL_PASSWORD_HASH}"
 
 # ── Nginx Proxy Manager integration ─────────────────────────────────────────
 # If you use NPM, uncomment the lines below and remove the "ports" mapping above.
