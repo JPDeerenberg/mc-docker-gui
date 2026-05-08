@@ -1,0 +1,24 @@
+services:
+  mcpanel:
+    build: .
+    # Or use a pre-built image if you push to a registry:
+    # image: your-registry/mcpanel:latest
+    container_name: mcpanel
+    restart: unless-stopped
+    ports:
+      - "3000:3000"          # Remove this if you're using Nginx Proxy Manager
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      PORT: 3000
+      JWT_SECRET: "change-this-to-a-long-random-string"
+      PANEL_USERNAME: "admin"
+      # Generate with: docker exec mcpanel node -e "console.log(require('bcryptjs').hashSync('yourpassword', 12))"
+      # or: npm run hash yourpassword
+      PANEL_PASSWORD_HASH: ""   # Leave empty to use default "admin" password — CHANGE THIS
+    networks:
+      - proxy           # Add this if you're using Nginx Proxy Manager on a custom network
+
+networks:
+  proxy:
+    external: true      # Your NPM network — adjust to your setup
