@@ -5,7 +5,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "hash": "node -e \"const b=require('bcryptjs');const p=process.argv[1];console.log(b.hashSync(p,12));\" --"
+    "hash": "node -e \"const b=require('bcryptjs');const p=process.argv[1];const h=b.hashSync(p,12);console.log('Raw hash:          '+h);console.log('For .env (escaped): '+h.replace(/\\$/g,'$$$$'));\" --"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

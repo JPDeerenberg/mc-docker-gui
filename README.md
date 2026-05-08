@@ -58,6 +58,15 @@ npm run hash yourpassword
 docker exec mcpanel node -e "console.log(require('bcryptjs').hashSync('yourpassword', 12))"
 ```
 
+> ⚠️ **Important:** Docker Compose treats `$` as a variable reference in `.env` files. You **must** escape every `$` in the bcrypt hash by doubling it to `$$`.
+>
+> For example, if the hash is `$2a$12$QBFm5pfhCG9xud.Fe/OBx.cO5yGtumLf`, write it as:
+> ```
+> PANEL_PASSWORD_HASH=$$2a$$12$$QBFm5pfhCG9xud.Fe/OBx.cO5yGtumLf
+> ```
+>
+> The `npm run hash` command will show both the raw hash and the escaped version ready to paste.
+
 Then restart: `docker compose restart mcpanel`
 
 ### 4. Behind Nginx Proxy Manager
