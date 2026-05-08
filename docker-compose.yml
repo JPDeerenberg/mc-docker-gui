@@ -16,9 +16,14 @@ services:
       # Generate with: docker exec mcpanel node -e "console.log(require('bcryptjs').hashSync('yourpassword', 12))"
       # or: npm run hash yourpassword
       PANEL_PASSWORD_HASH: ""   # Leave empty to use default "admin" password — CHANGE THIS
-    networks:
-      - proxy           # Add this if you're using Nginx Proxy Manager on a custom network
 
-networks:
-  proxy:
-    external: true      # Your NPM network — adjust to your setup
+# ── Nginx Proxy Manager integration ─────────────────────────────────────────
+# If you use NPM, uncomment the lines below and remove the "ports" mapping above.
+# Make sure the "proxy" network already exists: docker network create proxy
+#
+#    networks:
+#      - proxy
+#
+# networks:
+#   proxy:
+#     external: true
