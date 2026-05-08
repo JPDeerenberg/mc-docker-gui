@@ -397,6 +397,16 @@
   .save-btn:hover { background: #00ffb3; }
   .save-btn:disabled { opacity:.4; cursor:not-allowed; }
 
+  .settings-section { margin-bottom: 28px; }
+  .settings-section-title {
+    font-size: 13px; font-weight: 700; color: var(--text);
+    text-transform: uppercase; letter-spacing: .06em;
+    padding-bottom: 10px; margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .settings-section-title .icon { font-size: 15px; }
+
   .props-grid {
     display: grid; grid-template-columns: 1fr 1fr;
     gap: 10px;
@@ -410,17 +420,81 @@
     transition: border-color .15s;
   }
   .prop-row:hover { border-color: var(--border2); }
+  .prop-row.toggle-row {
+    flex-direction: row; align-items: center; justify-content: space-between;
+    gap: 12px;
+  }
+  .prop-row.toggle-row .prop-info { flex: 1; min-width: 0; }
   .prop-key {
     font-family: 'JetBrains Mono', monospace; font-size: 11px;
     color: var(--text2); font-weight: 500;
   }
-  .prop-value input {
+  .prop-label {
+    font-size: 13px; font-weight: 600; color: var(--text);
+    margin-bottom: 1px;
+  }
+  .prop-desc {
+    font-size: 11px; color: var(--text3); line-height: 1.4;
+  }
+  .prop-value input[type="text"] {
     background: transparent; border: none; padding: 0;
     font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500;
     color: var(--green); width: 100%;
   }
-  .prop-value input:focus { box-shadow: none; border: none; }
-  .prop-comment { font-size: 10px; color: var(--text3); }
+  .prop-value input[type="text"]:focus { box-shadow: none; border: none; }
+  .prop-value input[type="number"] {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 7px; padding: 6px 10px; width: 100%;
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; font-weight: 500;
+    color: var(--green); -moz-appearance: textfield;
+  }
+  .prop-value input[type="number"]:focus {
+    border-color: var(--green-dim); box-shadow: 0 0 0 3px var(--green-glow);
+  }
+  .prop-value input[type="number"]::-webkit-inner-spin-button { opacity: 1; }
+  .prop-value select {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: 7px; padding: 7px 30px 7px 10px; width: 100%;
+    font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 500;
+    color: var(--green); cursor: pointer; outline: none;
+    appearance: none; -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238899c0' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 10px center;
+  }
+  .prop-value select:focus {
+    border-color: var(--green-dim); box-shadow: 0 0 0 3px var(--green-glow);
+  }
+  .prop-value select option {
+    background: var(--bg2); color: var(--text);
+  }
+
+  /* Toggle switch */
+  .toggle-switch {
+    position: relative; width: 44px; height: 24px; flex-shrink: 0;
+  }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; position: absolute; }
+  .toggle-track {
+    position: absolute; inset: 0; cursor: pointer;
+    background: var(--surface2); border: 1px solid var(--border2);
+    border-radius: 99px; transition: all .2s ease;
+  }
+  .toggle-track::after {
+    content: ''; position: absolute; top: 3px; left: 3px;
+    width: 16px; height: 16px; border-radius: 50%;
+    background: var(--text3); transition: all .2s ease;
+  }
+  .toggle-switch input:checked + .toggle-track {
+    background: rgba(0,229,160,.2); border-color: rgba(0,229,160,.4);
+  }
+  .toggle-switch input:checked + .toggle-track::after {
+    transform: translateX(20px); background: var(--green);
+    box-shadow: 0 0 8px rgba(0,229,160,.4);
+  }
+
+  .prop-range-label {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--text3); margin-top: 2px;
+  }
 
   .raw-textarea-wrap { margin-top: 20px; }
   .raw-textarea-wrap label { font-size: 12px; color: var(--text2); font-weight: 600;
@@ -439,67 +513,222 @@
   .stab-btn.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
   .stab-btn:hover:not(.active) { color: var(--text); }
 
-  /* ── Players ── */
+  /* ── Players (redesigned) ── */
   .players-wrap { }
-  .player-tabs {
-    display: flex; gap: 8px; margin-bottom: 16px;
-  }
-  .ptab-btn {
-    padding: 6px 14px; font-size: 12px; font-weight: 500;
-    background: var(--surface); border: 1px solid var(--border); color: var(--text2); border-radius: 8px;
-  }
-  .ptab-btn.active { background: var(--green); color: #021a10; border-color: var(--green); font-weight: 700; }
-  .ptab-btn:hover:not(.active) { border-color: var(--border2); color: var(--text); }
 
-  .player-list-wrap {
+  .players-toolbar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .players-search {
+    flex: 1; min-width: 180px; max-width: 320px;
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px 12px 8px 34px;
+    font-size: 13px; color: var(--text);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%234a5880' stroke-width='2.5'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: 10px center;
+  }
+  .players-search:focus {
+    border-color: var(--green-dim); box-shadow: 0 0 0 3px var(--green-glow);
+  }
+  .players-count {
+    font-size: 12px; color: var(--text3); font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .player-filter-tabs {
+    display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .pft-btn {
+    padding: 5px 14px; border-radius: 99px; font-size: 12px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text2);
+    cursor: pointer; transition: all .15s;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .pft-btn.active { background: var(--surface2); color: var(--text); border-color: var(--border2); }
+  .pft-btn .pft-count {
+    background: var(--bg); padding: 0 6px; border-radius: 99px;
+    font-size: 10px; font-weight: 700; color: var(--text3);
+  }
+  .pft-btn.active .pft-count { color: var(--text2); }
+
+  .players-grid {
+    display: flex; flex-direction: column; gap: 2px;
     background: var(--bg2); border: 1px solid var(--border);
     border-radius: var(--radius-lg); overflow: hidden;
   }
-  .player-list-header {
-    padding: 12px 16px; background: var(--bg3);
-    border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; gap: 10px;
-    font-size: 13px; font-weight: 500;
-  }
-  .player-list-header span { flex: 1; color: var(--text2); }
-  .add-player-btn {
-    padding: 5px 12px; background: rgba(0,229,160,.15);
-    border: 1px solid rgba(0,229,160,.3); color: var(--green);
-    font-size: 12px; font-weight: 600; border-radius: 7px;
-    display: flex; align-items: center; gap: 5px;
-  }
-  .add-player-btn:hover { background: rgba(0,229,160,.25); }
 
-  .player-item {
+  .player-card {
     display: flex; align-items: center; gap: 12px;
-    padding: 12px 16px; border-bottom: 1px solid var(--border);
-    transition: background .15s;
+    padding: 14px 16px; background: var(--bg2);
+    cursor: pointer; transition: all .15s;
+    border-bottom: 1px solid var(--border);
   }
-  .player-item:last-child { border-bottom: none; }
-  .player-item:hover { background: var(--surface); }
-  .player-avatar {
-    width: 34px; height: 34px; border-radius: 8px;
-    background: var(--surface2); display: flex; align-items: center; justify-content: center;
-    font-size: 16px; overflow: hidden; flex-shrink: 0;
-  }
-  .player-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .player-name { font-weight: 600; font-size: 14px; }
-  .player-uuid { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text3); margin-top: 1px; }
-  .player-meta { flex: 1; }
-  .player-badge { font-size: 10px; padding: 2px 8px; border-radius: 99px; font-weight: 700; }
-  .player-badge.op { background: rgba(255,179,64,.15); color: var(--amber); border: 1px solid rgba(255,179,64,.25); }
-  .remove-btn {
-    padding: 4px 10px; background: transparent; border: 1px solid transparent;
-    color: var(--text3); font-size: 11px; border-radius: 6px; opacity: 0;
-    transition: all .15s;
-  }
-  .player-item:hover .remove-btn { opacity: 1; }
-  .remove-btn:hover { border-color: rgba(255,77,109,.3); color: var(--red); background: rgba(255,77,109,.08); }
+  .player-card:last-child { border-bottom: none; }
+  .player-card:hover { background: var(--surface); }
+  .player-card.active { background: var(--surface); border-left: 3px solid var(--green); }
 
-  .empty-list {
-    padding: 40px; text-align: center; color: var(--text2); font-size: 13px;
+  .pc-avatar {
+    width: 40px; height: 40px; border-radius: 10px;
+    background: var(--surface2); display: flex; align-items: center; justify-content: center;
+    font-size: 18px; overflow: hidden; flex-shrink: 0;
+    border: 1px solid var(--border);
   }
-  .empty-list .emoji { font-size: 28px; display: block; margin-bottom: 8px; }
+  .pc-avatar img { width: 100%; height: 100%; object-fit: cover; image-rendering: pixelated; }
+
+  .pc-info { flex: 1; min-width: 0; }
+  .pc-name {
+    font-weight: 600; font-size: 14px; color: var(--text);
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  }
+  .pc-uuid {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px;
+    color: var(--text3); margin-top: 1px;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  .pc-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+  .pc-badge {
+    font-size: 9px; padding: 2px 7px; border-radius: 99px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .pc-badge.op { background: rgba(255,179,64,.15); color: var(--amber); border: 1px solid rgba(255,179,64,.25); }
+  .pc-badge.wl { background: rgba(0,229,160,.1); color: var(--green); border: 1px solid rgba(0,229,160,.2); }
+  .pc-badge.ban { background: rgba(255,77,109,.1); color: var(--red); border: 1px solid rgba(255,77,109,.2); }
+  .pc-badge.perm { background: rgba(77,159,255,.1); color: var(--blue); border: 1px solid rgba(77,159,255,.2); }
+
+  .pc-arrow {
+    color: var(--text3); font-size: 16px; transition: transform .2s; flex-shrink: 0;
+  }
+  .player-card.active .pc-arrow { transform: rotate(90deg); color: var(--green); }
+
+  /* ── Player detail panel ── */
+  .player-detail-panel {
+    background: var(--bg3); border-bottom: 1px solid var(--border);
+    padding: 0 16px;
+    max-height: 0; overflow: hidden;
+    transition: max-height .3s ease, padding .3s ease;
+  }
+  .player-detail-panel.open {
+    max-height: 2000px; padding: 20px 16px;
+  }
+
+  .pd-tabs {
+    display: flex; gap: 4px; margin-bottom: 16px;
+    background: var(--bg); border-radius: var(--radius); padding: 3px;
+    width: fit-content;
+  }
+  .pd-tab {
+    padding: 5px 14px; font-size: 12px; font-weight: 500;
+    background: transparent; color: var(--text2); border-radius: 7px;
+    cursor: pointer; border: none; transition: all .15s;
+  }
+  .pd-tab:hover { color: var(--text); }
+  .pd-tab.active { background: var(--surface2); color: var(--text); }
+
+  .pd-content { animation: fadeIn .2s ease; }
+
+  /* Overview stats grid */
+  .pd-overview-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 10px; margin-bottom: 16px;
+  }
+  .pd-stat-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px;
+  }
+  .pd-stat-label { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+  .pd-stat-value { font-size: 18px; font-weight: 700; color: var(--text); }
+  .pd-stat-value .pd-stat-icon { font-size: 16px; margin-right: 4px; }
+  .pd-stat-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* Inventory grid */
+  .pd-inv-section { margin-bottom: 16px; }
+  .pd-inv-label {
+    font-size: 11px; font-weight: 700; color: var(--text2);
+    text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px;
+  }
+  .pd-inv-grid {
+    display: grid; grid-template-columns: repeat(9, 1fr);
+    gap: 3px;
+  }
+  .pd-inv-slot {
+    aspect-ratio: 1; background: var(--bg2); border: 1px solid var(--border);
+    border-radius: 6px; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    position: relative; min-width: 0; overflow: hidden;
+    transition: border-color .15s;
+  }
+  .pd-inv-slot:hover { border-color: var(--border2); }
+  .pd-inv-slot.has-item { border-color: var(--border2); }
+  .pd-inv-slot.selected { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
+  .pd-inv-slot .item-name {
+    font-size: 9px; color: var(--text2); text-align: center;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: 100%; padding: 0 2px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .pd-inv-slot .item-count {
+    position: absolute; bottom: 2px; right: 3px;
+    font-size: 9px; font-weight: 700; color: var(--text);
+    font-family: 'JetBrains Mono', monospace;
+    text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  }
+  .pd-inv-slot .item-icon {
+    font-size: 18px; line-height: 1;
+  }
+
+  .pd-armor-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 3px; max-width: 240px;
+  }
+
+  /* Stats viewer */
+  .pd-stats-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 10px;
+  }
+  .pd-stats-category {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius); overflow: hidden;
+  }
+  .pd-stats-cat-title {
+    padding: 10px 12px; font-size: 12px; font-weight: 700;
+    color: var(--text); background: var(--bg3);
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .pd-stats-cat-body { padding: 8px 12px; }
+  .pd-stat-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 4px 0; font-size: 12px;
+  }
+  .pd-stat-row:not(:last-child) { border-bottom: 1px solid var(--border); }
+  .pd-stat-row .stat-key { color: var(--text2); }
+  .pd-stat-row .stat-val { color: var(--text); font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+  .pd-loading {
+    padding: 40px; text-align: center; color: var(--text2); font-size: 13px;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+  }
+  .pd-error {
+    padding: 20px; text-align: center; color: var(--red); font-size: 13px;
+    background: rgba(255,77,109,.05); border-radius: var(--radius);
+  }
+
+  .bedrock-data-notice {
+    padding: 14px 16px; margin-bottom: 16px;
+    background: rgba(255,159,67,.06); border: 1px solid rgba(255,159,67,.2);
+    border-radius: var(--radius); color: var(--bedrock); font-size: 12px;
+    line-height: 1.6;
+  }
+
+  .empty-players {
+    padding: 60px 24px; text-align: center; color: var(--text2);
+    font-size: 13px;
+  }
+  .empty-players .emoji { font-size: 36px; display: block; margin-bottom: 10px; }
+  .empty-players h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
 
   /* Add player modal */
   .modal-overlay {
@@ -678,7 +907,7 @@
           </div>
         </div>
         <div id="settings-visual">
-          <div class="props-grid" id="props-grid"></div>
+          <div id="props-grid"></div>
         </div>
         <div id="settings-raw" class="raw-textarea-wrap hidden">
           <label>Raw server.properties</label>
@@ -690,25 +919,15 @@
     <!-- Players -->
     <div id="tab-players" class="hidden">
       <div class="players-wrap">
-        <!-- Java player tabs -->
-        <div class="player-tabs" id="java-player-tabs">
-          <button class="ptab-btn active" data-ptab="whitelist">Whitelist</button>
-          <button class="ptab-btn"        data-ptab="ops">Operators</button>
-          <button class="ptab-btn"        data-ptab="banned_players">Banned Players</button>
-          <button class="ptab-btn"        data-ptab="banned_ips">Banned IPs</button>
+        <div class="players-toolbar">
+          <input type="text" class="players-search" id="players-search" placeholder="Search players…">
+          <span class="players-count" id="players-count"></span>
         </div>
-        <!-- Bedrock player tabs -->
-        <div class="player-tabs hidden" id="bedrock-player-tabs">
-          <button class="ptab-btn active" data-ptab="allowlist">📜 Allowlist</button>
-          <button class="ptab-btn"        data-ptab="permissions">🔑 Permissions</button>
+        <div class="player-filter-tabs" id="player-filter-tabs"></div>
+        <div class="bedrock-data-notice hidden" id="bedrock-data-notice">
+          🪨 <strong>Bedrock Edition</strong> — Player data (inventory, health, XP) is stored in a LevelDB database and cannot be inspected from outside the container. Showing allowlist and permissions only.
         </div>
-        <div class="player-list-wrap">
-          <div class="player-list-header">
-            <span id="player-list-title">Whitelist</span>
-            <button class="add-player-btn" id="add-player-btn">+ Add</button>
-          </div>
-          <div id="player-list-body"></div>
-        </div>
+        <div id="players-list-container"></div>
       </div>
     </div>
   </div>
@@ -742,6 +961,12 @@ const state = {
   currentContainer: null,
   serverType: 'java',
   players: {},
+  allPlayers: [],
+  allPlayersFilter: 'all',
+  allPlayersSearch: '',
+  selectedPlayerUuid: null,
+  playerDataCache: {},
+  playerStatsCache: {},
   currentPtab: 'whitelist',
   propsRaw: '',
   wsConn: null,
@@ -1118,14 +1343,14 @@ document.getElementById('cmd-input').addEventListener('keydown', e => {
 async function loadSettings() {
   const grid = document.getElementById('props-grid');
   const raw  = document.getElementById('raw-props');
-  grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text2);display:flex;align-items:center;gap:8px;padding:8px"><span class="loader"></span> Loading…</div>';
+  grid.innerHTML = '<div style="color:var(--text2);display:flex;align-items:center;gap:8px;padding:8px"><span class="loader"></span> Loading…</div>';
   try {
     const res = await api('GET', `/api/containers/${state.currentContainer.Id}/file?path=/data/server.properties`);
     state.propsRaw = res.content;
     raw.value = res.content;
     renderProps(res.content);
   } catch (e) {
-    grid.innerHTML = `<div style="grid-column:1/-1;color:var(--red);padding:8px">${e.message}</div>`;
+    grid.innerHTML = `<div style="color:var(--red);padding:8px">${e.message}</div>`;
   }
 }
 
@@ -1139,15 +1364,187 @@ function parseProps(raw) {
     .filter(Boolean);
 }
 
+// Property metadata: type, label, description, options, section
+const PROP_META = {
+  // ── General ──
+  'server-name':       { section: 'general', label: 'Server Name', desc: 'The name shown in the server list', type: 'text' },
+  'motd':              { section: 'general', label: 'Message of the Day', desc: 'Displayed below the server name in the multiplayer list', type: 'text' },
+  'server-port':       { section: 'general', label: 'Server Port', desc: 'Port the server listens on', type: 'number', min: 1, max: 65535 },
+  'max-players':       { section: 'general', label: 'Max Players', desc: 'Maximum number of players that can join', type: 'number', min: 1, max: 1000 },
+  'level-name':        { section: 'general', label: 'World Name', desc: 'Name of the world folder', type: 'text' },
+  'level-seed':        { section: 'general', label: 'World Seed', desc: 'Seed used for world generation (leave blank for random)', type: 'text' },
+  'level-type':        { section: 'general', label: 'World Type', desc: 'Type of world generation', type: 'select', options: ['default', 'flat', 'largeBiomes', 'amplified', 'buffet'] },
+  'gamemode':          { section: 'general', label: 'Default Gamemode', desc: 'Gamemode assigned to new players', type: 'select', options: ['survival', 'creative', 'adventure', 'spectator'] },
+  'difficulty':        { section: 'general', label: 'Difficulty', desc: 'Server difficulty level', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'] },
+  'force-gamemode':    { section: 'general', label: 'Force Gamemode', desc: 'Force players into the default gamemode when joining', type: 'toggle' },
+  'hardcore':          { section: 'general', label: 'Hardcore', desc: 'Players are set to spectator mode upon death', type: 'toggle' },
+
+  // ── World ──
+  'generate-structures':    { section: 'world', label: 'Generate Structures', desc: 'Generate villages, strongholds, mineshafts, etc.', type: 'toggle' },
+  'allow-nether':           { section: 'world', label: 'Allow Nether', desc: 'Allow players to travel to the Nether', type: 'toggle' },
+  'spawn-monsters':         { section: 'world', label: 'Spawn Monsters', desc: 'Hostile mobs will spawn in the world', type: 'toggle' },
+  'spawn-animals':          { section: 'world', label: 'Spawn Animals', desc: 'Animals will spawn in the world', type: 'toggle' },
+  'spawn-npcs':             { section: 'world', label: 'Spawn NPCs', desc: 'Villagers will spawn in villages', type: 'toggle' },
+  'spawn-protection':       { section: 'world', label: 'Spawn Protection Radius', desc: 'Radius (in blocks) around spawn that is protected. Set 0 to disable', type: 'number', min: 0, max: 256 },
+  'max-world-size':         { section: 'world', label: 'Max World Size', desc: 'Maximum radius of the world border (in blocks)', type: 'number', min: 1, max: 29999984 },
+  'max-build-height':       { section: 'world', label: 'Max Build Height', desc: 'Maximum height (Y level) players can build at', type: 'number', min: 1, max: 320 },
+  'view-distance':          { section: 'world', label: 'View Distance', desc: 'Amount of chunks sent to each player (3–32)', type: 'number', min: 3, max: 32 },
+  'simulation-distance':    { section: 'world', label: 'Simulation Distance', desc: 'Chunk distance that entities are ticked (3–32)', type: 'number', min: 3, max: 32 },
+
+  // ── Players ──
+  'pvp':                    { section: 'players', label: 'PvP', desc: 'Allow players to fight each other', type: 'toggle' },
+  'allow-flight':           { section: 'players', label: 'Allow Flight', desc: 'Allow survival players to fly (with mods)', type: 'toggle' },
+  'white-list':             { section: 'players', label: 'Whitelist', desc: 'Only whitelisted players can join', type: 'toggle' },
+  'enforce-whitelist':      { section: 'players', label: 'Enforce Whitelist', desc: 'Kick non-whitelisted players when whitelist reloads', type: 'toggle' },
+  'online-mode':            { section: 'players', label: 'Online Mode', desc: 'Verify players against Mojang accounts. Disable for offline/cracked servers', type: 'toggle' },
+  'player-idle-timeout':    { section: 'players', label: 'Idle Timeout', desc: 'Minutes before idle players are kicked (0 = disabled)', type: 'number', min: 0, max: 9999 },
+  'op-permission-level':    { section: 'players', label: 'OP Permission Level', desc: 'Default permission level for operators (1–4)', type: 'select', options: ['1', '2', '3', '4'] },
+
+  // ── Network ──
+  'server-ip':              { section: 'network', label: 'Server IP', desc: 'IP address to bind to (leave blank for all interfaces)', type: 'text' },
+  'network-compression-threshold': { section: 'network', label: 'Compression Threshold', desc: 'Packet size threshold before compression (-1 to disable)', type: 'number', min: -1, max: 65535 },
+  'rate-limit':             { section: 'network', label: 'Rate Limit', desc: 'Max packets per second per player (0 = disabled)', type: 'number', min: 0, max: 99999 },
+  'prevent-proxy-connections': { section: 'network', label: 'Prevent Proxy/VPN', desc: 'Block connections from proxies and VPNs', type: 'toggle' },
+  'enable-query':           { section: 'network', label: 'Enable Query', desc: 'Enable GameSpy4 query protocol', type: 'toggle' },
+  'query.port':             { section: 'network', label: 'Query Port', desc: 'Port for the GameSpy4 query protocol', type: 'number', min: 1, max: 65535 },
+  'enable-status':          { section: 'network', label: 'Enable Status', desc: 'Show server in the multiplayer server list', type: 'toggle' },
+
+  // ── RCON ──
+  'enable-rcon':            { section: 'rcon', label: 'Enable RCON', desc: 'Enable remote console access', type: 'toggle' },
+  'rcon.port':              { section: 'rcon', label: 'RCON Port', desc: 'Port for the RCON protocol', type: 'number', min: 1, max: 65535 },
+  'rcon.password':          { section: 'rcon', label: 'RCON Password', desc: 'Password for RCON connections', type: 'text' },
+  'broadcast-rcon-to-ops':  { section: 'rcon', label: 'Broadcast RCON to OPs', desc: 'Show RCON command output to operators', type: 'toggle' },
+  'broadcast-console-to-ops': { section: 'rcon', label: 'Broadcast Console to OPs', desc: 'Show console output to operators', type: 'toggle' },
+
+  // ── Advanced ──
+  'enable-command-block':    { section: 'advanced', label: 'Command Blocks', desc: 'Allow command blocks to function', type: 'toggle' },
+  'function-permission-level': { section: 'advanced', label: 'Function Permission Level', desc: 'Permission level for data packs (1–4)', type: 'select', options: ['1', '2', '3', '4'] },
+  'sync-chunk-writes':      { section: 'advanced', label: 'Sync Chunk Writes', desc: 'Write chunks synchronously to disk', type: 'toggle' },
+  'entity-broadcast-range-percentage': { section: 'advanced', label: 'Entity Broadcast Range %', desc: 'Percentage of default entity visibility range (10–1000)', type: 'number', min: 10, max: 1000 },
+  'max-chained-neighbor-updates': { section: 'advanced', label: 'Max Chained Neighbor Updates', desc: 'Limits redstone chain length (-1 = unlimited)', type: 'number', min: -1, max: 999999 },
+  'enforce-secure-profile':  { section: 'advanced', label: 'Enforce Secure Profile', desc: 'Require Mojang-signed public key from players', type: 'toggle' },
+  'require-resource-pack':   { section: 'advanced', label: 'Require Resource Pack', desc: 'Kick players who decline the resource pack', type: 'toggle' },
+  'resource-pack':           { section: 'advanced', label: 'Resource Pack URL', desc: 'URL to server resource pack', type: 'text' },
+  'resource-pack-sha1':      { section: 'advanced', label: 'Resource Pack SHA1', desc: 'SHA1 hash of the resource pack for verification', type: 'text' },
+  'text-filtering-config':   { section: 'advanced', label: 'Text Filtering Config', desc: 'Text filtering configuration', type: 'text' },
+  'log-ips':                 { section: 'advanced', label: 'Log IPs', desc: 'Log player IP addresses in the server log', type: 'toggle' },
+};
+
+const SECTIONS = {
+  general:  { label: 'General', icon: '⚙️' },
+  world:    { label: 'World', icon: '🌍' },
+  players:  { label: 'Players', icon: '👥' },
+  network:  { label: 'Network', icon: '🌐' },
+  rcon:     { label: 'RCON', icon: '🔌' },
+  advanced: { label: 'Advanced', icon: '🔧' },
+  other:    { label: 'Other', icon: '📋' },
+};
+
 function renderProps(raw) {
-  const grid  = document.getElementById('props-grid');
+  const container = document.getElementById('props-grid');
   const props = parseProps(raw);
-  if (!props.length) { grid.innerHTML = '<div style="grid-column:1/-1;color:var(--text2);padding:8px">No properties found.</div>'; return; }
-  grid.innerHTML = props.map(([k, v]) => `
-    <div class="prop-row">
-      <div class="prop-key">${escHtml(k)}</div>
-      <div class="prop-value"><input type="text" data-key="${escHtml(k)}" value="${escHtml(v)}"></div>
-    </div>`).join('');
+  if (!props.length) { container.innerHTML = '<div style="color:var(--text2);padding:8px">No properties found.</div>'; return; }
+
+  // Group props by section
+  const grouped = {};
+  for (const sec of Object.keys(SECTIONS)) grouped[sec] = [];
+
+  props.forEach(([k, v]) => {
+    const meta = PROP_META[k];
+    const sec = meta?.section || 'other';
+    if (!grouped[sec]) grouped[sec] = [];
+    grouped[sec].push([k, v, meta]);
+  });
+
+  let html = '';
+  for (const [secKey, secInfo] of Object.entries(SECTIONS)) {
+    const items = grouped[secKey];
+    if (!items || !items.length) continue;
+
+    html += `<div class="settings-section">
+      <div class="settings-section-title"><span class="icon">${secInfo.icon}</span> ${secInfo.label}</div>
+      <div class="props-grid">`;
+
+    items.forEach(([k, v, meta]) => {
+      html += renderPropRow(k, v, meta);
+    });
+
+    html += `</div></div>`;
+  }
+
+  container.innerHTML = html;
+
+  // Wire up toggle changes to sync hidden input values
+  container.querySelectorAll('.toggle-switch input').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const hidden = container.querySelector(`input[type="hidden"][data-key="${cb.dataset.key}"]`);
+      if (hidden) hidden.value = cb.checked ? 'true' : 'false';
+    });
+  });
+}
+
+function renderPropRow(key, value, meta) {
+  if (!meta) {
+    // Unknown property — plain text input
+    return `<div class="prop-row">
+      <div class="prop-key">${escHtml(key)}</div>
+      <div class="prop-value"><input type="text" data-key="${escHtml(key)}" value="${escHtml(value)}"></div>
+    </div>`;
+  }
+
+  const label = meta.label || key;
+  const desc  = meta.desc ? `<div class="prop-desc">${escHtml(meta.desc)}</div>` : '';
+  const ek    = escHtml(key);
+  const ev    = escHtml(value);
+
+  if (meta.type === 'toggle') {
+    const checked = value === 'true' ? 'checked' : '';
+    return `<div class="prop-row toggle-row">
+      <div class="prop-info">
+        <div class="prop-label">${escHtml(label)}</div>
+        ${desc}
+        <div class="prop-key">${ek}</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" data-key="${ek}" ${checked}>
+        <span class="toggle-track"></span>
+      </label>
+      <input type="hidden" data-key="${ek}" value="${ev}">
+    </div>`;
+  }
+
+  if (meta.type === 'select') {
+    const opts = meta.options.map(o =>
+      `<option value="${escHtml(o)}" ${o === value ? 'selected' : ''}>${escHtml(o)}</option>`
+    ).join('');
+    return `<div class="prop-row">
+      <div class="prop-label">${escHtml(label)}</div>
+      ${desc}
+      <div class="prop-key">${ek}</div>
+      <div class="prop-value"><select data-key="${ek}">${opts}</select></div>
+    </div>`;
+  }
+
+  if (meta.type === 'number') {
+    const rangeLabel = meta.min !== undefined ? `<div class="prop-range-label">${meta.min} – ${meta.max}</div>` : '';
+    return `<div class="prop-row">
+      <div class="prop-label">${escHtml(label)}</div>
+      ${desc}
+      <div class="prop-key">${ek}</div>
+      <div class="prop-value">
+        <input type="number" data-key="${ek}" value="${ev}" min="${meta.min ?? ''}" max="${meta.max ?? ''}" step="1">
+        ${rangeLabel}
+      </div>
+    </div>`;
+  }
+
+  // Default: text input with label + desc
+  return `<div class="prop-row">
+    <div class="prop-label">${escHtml(label)}</div>
+    ${desc}
+    <div class="prop-key">${ek}</div>
+    <div class="prop-value"><input type="text" data-key="${ek}" value="${ev}"></div>
+  </div>`;
 }
 
 document.getElementById('save-settings').addEventListener('click', async () => {
@@ -1160,12 +1557,19 @@ document.getElementById('save-settings').addEventListener('click', async () => {
   if (rawView) {
     content = document.getElementById('raw-props').value;
   } else {
-    // Reconstruct from inputs
+    // Collect values from all control types
     const lines = state.propsRaw.split('\n');
     const updated = {};
-    document.querySelectorAll('#props-grid input[data-key]').forEach(inp => {
+
+    // Text, number, and hidden inputs
+    document.querySelectorAll('#props-grid input[data-key][type="text"], #props-grid input[data-key][type="number"], #props-grid input[data-key][type="hidden"]').forEach(inp => {
       updated[inp.dataset.key] = inp.value;
     });
+    // Select dropdowns
+    document.querySelectorAll('#props-grid select[data-key]').forEach(sel => {
+      updated[sel.dataset.key] = sel.value;
+    });
+
     content = lines.map(l => {
       if (l.trim().startsWith('#') || !l.trim()) return l;
       const i = l.indexOf('=');
@@ -1208,108 +1612,350 @@ document.getElementById('raw-props').addEventListener('input', function() {
 // ══════════════════════════════════════════════
 //  PLAYERS
 // ══════════════════════════════════════════════
+
+const ITEM_ICONS = {
+  diamond_sword:'⚔️', iron_sword:'🗡️', wooden_sword:'🗡️', stone_sword:'🗡️', golden_sword:'🗡️', netherite_sword:'⚔️',
+  bow:'🏹', crossbow:'🏹', trident:'🔱', shield:'🛡️',
+  diamond_pickaxe:'⛏️', iron_pickaxe:'⛏️', wooden_pickaxe:'⛏️', stone_pickaxe:'⛏️', golden_pickaxe:'⛏️', netherite_pickaxe:'⛏️',
+  diamond_axe:'🪓', iron_axe:'🪓', wooden_axe:'🪓', stone_axe:'🪓', golden_axe:'🪓', netherite_axe:'🪓',
+  diamond_shovel:'🪏', iron_shovel:'🪏',
+  diamond_helmet:'🪖', iron_helmet:'🪖', golden_helmet:'🪖', netherite_helmet:'🪖', leather_helmet:'🪖',
+  diamond_chestplate:'👕', iron_chestplate:'👕', golden_chestplate:'👕', netherite_chestplate:'👕',
+  diamond_leggings:'👖', iron_leggings:'👖', golden_leggings:'👖', netherite_leggings:'👖',
+  diamond_boots:'👢', iron_boots:'👢', golden_boots:'👢', netherite_boots:'👢',
+  apple:'🍎', golden_apple:'🍏', enchanted_golden_apple:'✨', bread:'🍞', cooked_beef:'🥩', cooked_porkchop:'🥩',
+  diamond:'💎', emerald:'💚', gold_ingot:'🥇', iron_ingot:'🪙', netherite_ingot:'🟫',
+  coal:'�ite', torch:'🔦', ender_pearl:'🟣', blaze_rod:'🥢',
+  oak_log:'🪵', cobblestone:'🪨', dirt:'🟫', sand:'🟨',
+  arrow:'➡️', tnt:'🧨', bucket:'🪣', water_bucket:'💧', lava_bucket:'🟠',
+  elytra:'🪂', totem_of_undying:'🗿', compass:'🧭', clock:'🕐', map:'🗺️', filled_map:'🗺️',
+  book:'📕', writable_book:'📖', enchanted_book:'📗', name_tag:'🏷️',
+  fishing_rod:'🎣', lead:'🪢', saddle:'🪑',
+};
+
+function getItemIcon(id) { return ITEM_ICONS[id] || '📦'; }
+
+function formatItemName(id) {
+  return id.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatStatKey(key) {
+  return key.replace('minecraft:', '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatStatNumber(n) {
+  if (n >= 1000000) return (n/1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n/1000).toFixed(1) + 'K';
+  return n.toLocaleString();
+}
+
 async function loadPlayers() {
-  document.getElementById('player-list-body').innerHTML =
-    '<div style="padding:24px;color:var(--text2);display:flex;align-items:center;gap:8px"><span class="loader"></span> Loading…</div>';
+  const container = document.getElementById('players-list-container');
+  container.innerHTML = '<div class="pd-loading"><span class="loader"></span> Loading players…</div>';
 
   const isBedrock = state.serverType === 'bedrock';
-  document.getElementById('java-player-tabs').classList.toggle('hidden', isBedrock);
-  document.getElementById('bedrock-player-tabs').classList.toggle('hidden', !isBedrock);
-  state.currentPtab = isBedrock ? 'allowlist' : 'whitelist';
-  document.querySelectorAll('#java-player-tabs .ptab-btn, #bedrock-player-tabs .ptab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.ptab === state.currentPtab);
-  });
+  document.getElementById('bedrock-data-notice').classList.toggle('hidden', !isBedrock);
+
+  state.selectedPlayerUuid = null;
+  state.playerDataCache = {};
+  state.playerStatsCache = {};
+  state.allPlayersFilter = 'all';
+  state.allPlayersSearch = '';
+  document.getElementById('players-search').value = '';
 
   try {
-    state.players = await api('GET', `/api/containers/${state.currentContainer.Id}/players?type=${state.serverType}`);
-    renderPlayerTab(state.currentPtab);
+    const res = await api('GET', `/api/containers/${state.currentContainer.Id}/all-players?type=${state.serverType}`);
+    state.allPlayers = res.players || [];
+    renderPlayerFilterTabs();
+    renderAllPlayers();
   } catch (e) {
-    document.getElementById('player-list-body').innerHTML =
-      `<div class="empty-list"><span class="emoji">⚠</span>${e.message}</div>`;
+    container.innerHTML = `<div class="empty-players"><span class="emoji">⚠️</span><h3>Could not load players</h3>${escHtml(e.message)}</div>`;
   }
 }
 
-document.querySelectorAll('.ptab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    // Only affect tabs in the same tab-group
-    const group = btn.closest('.player-tabs');
-    group.querySelectorAll('.ptab-btn').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    state.currentPtab = btn.dataset.ptab;
-    renderPlayerTab(state.currentPtab);
-  });
+// Search handler
+document.getElementById('players-search').addEventListener('input', function() {
+  state.allPlayersSearch = this.value.toLowerCase().trim();
+  renderAllPlayers();
 });
 
-const PTAB_LABELS = {
-  // Java
-  whitelist:       { title: 'Whitelist',      file: 'whitelist.json',       nameKey: 'name', idKey: 'uuid' },
-  ops:             { title: 'Operators',       file: 'ops.json',             nameKey: 'name', idKey: 'uuid' },
-  banned_players:  { title: 'Banned Players',  file: 'banned-players.json',  nameKey: 'name', idKey: 'uuid' },
-  banned_ips:      { title: 'Banned IPs',      file: 'banned-ips.json',      nameKey: 'ip',   idKey: null   },
-  // Bedrock
-  allowlist:       { title: 'Allowlist',       file: 'allowlist.json',       nameKey: 'name', idKey: 'xuid' },
-  permissions:     { title: 'Permissions',     file: 'permissions.json',     nameKey: 'xuid', idKey: null   },
-};
+function renderPlayerFilterTabs() {
+  const tabs = document.getElementById('player-filter-tabs');
+  const isBedrock = state.serverType === 'bedrock';
+  const all = state.allPlayers;
 
-function renderPlayerTab(tab) {
-  const cfg     = PTAB_LABELS[tab];
-  const players = state.players[tab] || [];
-  document.getElementById('player-list-title').textContent = `${cfg.title} (${players.length})`;
+  if (isBedrock) {
+    const wlCount = all.filter(p => p.allowlisted).length;
+    const opCount = all.filter(p => p.permission === 'operator').length;
+    tabs.innerHTML = `
+      <button class="pft-btn active" data-pf="all">All <span class="pft-count">${all.length}</span></button>
+      <button class="pft-btn" data-pf="allowlisted">📜 Allowlisted <span class="pft-count">${wlCount}</span></button>
+      <button class="pft-btn" data-pf="operator">👑 Operator <span class="pft-count">${opCount}</span></button>`;
+  } else {
+    const wlCount = all.filter(p => p.whitelisted).length;
+    const opCount = all.filter(p => p.op).length;
+    const banCount = all.filter(p => p.banned).length;
+    tabs.innerHTML = `
+      <button class="pft-btn active" data-pf="all">All <span class="pft-count">${all.length}</span></button>
+      <button class="pft-btn" data-pf="whitelisted">✅ Whitelisted <span class="pft-count">${wlCount}</span></button>
+      <button class="pft-btn" data-pf="op">👑 Operators <span class="pft-count">${opCount}</span></button>
+      <button class="pft-btn" data-pf="banned">🚫 Banned <span class="pft-count">${banCount}</span></button>`;
+  }
 
-  const body = document.getElementById('player-list-body');
+  tabs.querySelectorAll('.pft-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      tabs.querySelectorAll('.pft-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.allPlayersFilter = btn.dataset.pf;
+      renderAllPlayers();
+    });
+  });
+}
 
-  if (!players.length) {
-    body.innerHTML = `<div class="empty-list"><span class="emoji">👥</span>No entries in ${cfg.title.toLowerCase()}.</div>`;
+function getFilteredPlayers() {
+  let list = state.allPlayers;
+  const f = state.allPlayersFilter;
+  const isBedrock = state.serverType === 'bedrock';
+
+  if (f !== 'all') {
+    if (isBedrock) {
+      if (f === 'allowlisted') list = list.filter(p => p.allowlisted);
+      if (f === 'operator') list = list.filter(p => p.permission === 'operator');
+    } else {
+      if (f === 'whitelisted') list = list.filter(p => p.whitelisted);
+      if (f === 'op') list = list.filter(p => p.op);
+      if (f === 'banned') list = list.filter(p => p.banned);
+    }
+  }
+
+  if (state.allPlayersSearch) {
+    const q = state.allPlayersSearch;
+    list = list.filter(p => (p.name || '').toLowerCase().includes(q) || (p.uuid || '').toLowerCase().includes(q) || (p.xuid || '').toLowerCase().includes(q));
+  }
+
+  return list;
+}
+
+function renderAllPlayers() {
+  const container = document.getElementById('players-list-container');
+  const filtered = getFilteredPlayers();
+  const isBedrock = state.serverType === 'bedrock';
+
+  document.getElementById('players-count').textContent = `${filtered.length} of ${state.allPlayers.length} players`;
+
+  if (!filtered.length) {
+    container.innerHTML = `<div class="empty-players"><span class="emoji">👥</span><h3>No players found</h3>${state.allPlayersSearch ? 'Try a different search term.' : 'No players have joined this server yet.'}</div>`;
     return;
   }
 
-  body.innerHTML = players.map((p, i) => {
-    const name  = p[cfg.nameKey] || '—';
-    const uuid  = cfg.idKey ? (p[cfg.idKey] || '') : '';
-    const isOp  = tab === 'ops';
-    const level = isOp ? ` <span class="player-badge op">OP ${p.level || ''}</span>` : '';
-    return `
-      <div class="player-item">
-        <div class="player-avatar">
-          ${uuid ? `<img src="https://mc-heads.net/avatar/${name}/34" alt="${name}" onerror="this.replaceWith(document.createTextNode('👤'))">` : '👤'}
-        </div>
-        <div class="player-meta">
-          <div class="player-name">${escHtml(name)}${level}</div>
-          ${uuid ? `<div class="player-uuid">${escHtml(uuid)}</div>` : ''}
-        </div>
-        <button class="remove-btn" data-idx="${i}">Remove</button>
-      </div>`;
-  }).join('');
+  let html = '<div class="players-grid">';
+  for (const p of filtered) {
+    const id = p.uuid || p.xuid || p.name;
+    const isActive = state.selectedPlayerUuid === id;
+    const name = escHtml(p.name || 'Unknown');
+    const idStr = p.uuid ? escHtml(p.uuid) : (p.xuid ? `XUID: ${escHtml(p.xuid)}` : '');
 
-  body.querySelectorAll('.remove-btn').forEach(btn => {
-    btn.addEventListener('click', () => removePlayer(tab, parseInt(btn.dataset.idx)));
+    let badges = '';
+    if (isBedrock) {
+      if (p.allowlisted) badges += '<span class="pc-badge wl">Allowed</span>';
+      if (p.permission === 'operator') badges += '<span class="pc-badge op">Operator</span>';
+      else if (p.permission && p.permission !== 'member') badges += `<span class="pc-badge perm">${escHtml(p.permission)}</span>`;
+    } else {
+      if (p.op) badges += `<span class="pc-badge op">OP ${p.opLevel || ''}</span>`;
+      if (p.whitelisted) badges += '<span class="pc-badge wl">Whitelisted</span>';
+      if (p.banned) badges += '<span class="pc-badge ban">Banned</span>';
+    }
+
+    const hasDetail = !isBedrock && p.hasData;
+    const avatarSrc = p.uuid ? `https://mc-heads.net/avatar/${name}/40` : '';
+
+    html += `<div class="player-card${isActive ? ' active' : ''}" data-pid="${escHtml(id)}">
+      <div class="pc-avatar">${avatarSrc ? `<img src="${avatarSrc}" alt="${name}" onerror="this.replaceWith(document.createTextNode('👤'))">` : '👤'}</div>
+      <div class="pc-info">
+        <div class="pc-name">${name} <span class="pc-badges">${badges}</span></div>
+        ${idStr ? `<div class="pc-uuid">${idStr}</div>` : ''}
+      </div>
+      ${hasDetail ? '<span class="pc-arrow">›</span>' : ''}
+    </div>`;
+
+    if (isActive && hasDetail) {
+      html += `<div class="player-detail-panel open" id="pd-panel-${escHtml(id)}"><div class="pd-loading"><span class="loader"></span> Loading player data…</div></div>`;
+    }
+  }
+  html += '</div>';
+  container.innerHTML = html;
+
+  // Wire click handlers
+  container.querySelectorAll('.player-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const pid = card.dataset.pid;
+      const player = state.allPlayers.find(p => (p.uuid || p.xuid || p.name) === pid);
+      if (!player) return;
+      const hasDetail = !isBedrock && player.hasData;
+      if (!hasDetail) return;
+
+      if (state.selectedPlayerUuid === pid) {
+        state.selectedPlayerUuid = null;
+      } else {
+        state.selectedPlayerUuid = pid;
+      }
+      renderAllPlayers();
+
+      if (state.selectedPlayerUuid === pid) {
+        loadPlayerDetail(pid);
+      }
+    });
   });
 }
 
-async function removePlayer(tab, idx) {
-  const cfg  = PTAB_LABELS[tab];
-  const list = [...(state.players[tab] || [])];
-  list.splice(idx, 1);
+async function loadPlayerDetail(uuid) {
+  const panel = document.getElementById(`pd-panel-${uuid}`);
+  if (!panel) return;
+
   try {
-    await api('PUT', `/api/containers/${state.currentContainer.Id}/players`, { file: cfg.file, data: list });
-    state.players[tab] = list;
-    renderPlayerTab(tab);
-    toast('Removed.', 'success');
-  } catch (e) { toast(e.message, 'error'); }
+    // Load data + stats in parallel
+    const [dataRes, statsRes] = await Promise.allSettled([
+      state.playerDataCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-data/${uuid}`),
+      state.playerStatsCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-stats/${uuid}`).catch(() => null),
+    ]);
+
+    const pdata = dataRes.status === 'fulfilled' ? dataRes.value : null;
+    const pstats = statsRes.status === 'fulfilled' ? statsRes.value : null;
+    if (pdata) state.playerDataCache[uuid] = pdata;
+    if (pstats) state.playerStatsCache[uuid] = pstats;
+
+    if (!pdata) {
+      panel.innerHTML = '<div class="pd-error">Could not load player data. The .dat file may be corrupted or inaccessible.</div>';
+      return;
+    }
+
+    renderPlayerDetail(panel, uuid, pdata, pstats);
+  } catch (e) {
+    panel.innerHTML = `<div class="pd-error">${escHtml(e.message)}</div>`;
+  }
 }
 
-// Add player modal
-document.getElementById('add-player-btn').addEventListener('click', () => {
-  const cfg   = PTAB_LABELS[state.currentPtab];
-  const isIp  = state.currentPtab === 'banned_ips';
-  document.getElementById('modal-title').textContent = `Add to ${cfg.title}`;
-  document.getElementById('modal-label').textContent = isIp ? 'IP Address' : 'Username';
-  document.getElementById('modal-input').value = '';
-  document.getElementById('modal-input').placeholder = isIp ? '192.168.1.1' : 'PlayerName';
-  document.getElementById('modal-overlay').classList.remove('hidden');
-  document.getElementById('modal-input').focus();
-});
+function renderPlayerDetail(panel, uuid, pdata, pstats) {
+  const hasStats = pstats && pstats.stats;
+  panel.innerHTML = `
+    <div class="pd-tabs">
+      <button class="pd-tab active" data-pdt="overview">Overview</button>
+      <button class="pd-tab" data-pdt="inventory">Inventory</button>
+      <button class="pd-tab" data-pdt="enderchest">Ender Chest</button>
+      ${hasStats ? '<button class="pd-tab" data-pdt="stats">Stats</button>' : ''}
+    </div>
+    <div class="pd-content" id="pd-content-${uuid}"></div>`;
 
+  // Tab switching
+  panel.querySelectorAll('.pd-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      panel.querySelectorAll('.pd-tab').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      renderPlayerDetailTab(uuid, tab.dataset.pdt, pdata, pstats);
+    });
+  });
+
+  renderPlayerDetailTab(uuid, 'overview', pdata, pstats);
+}
+
+function renderPlayerDetailTab(uuid, tab, pdata, pstats) {
+  const el = document.getElementById(`pd-content-${uuid}`);
+  if (!el) return;
+
+  if (tab === 'overview') {
+    const hpPct = Math.round((pdata.health / pdata.maxHealth) * 100);
+    const foodPct = Math.round((pdata.foodLevel / 20) * 100);
+    el.innerHTML = `<div class="pd-overview-grid">
+      <div class="pd-stat-card"><div class="pd-stat-label">Health</div><div class="pd-stat-value"><span class="pd-stat-icon">❤️</span>${Math.round(pdata.health * 10) / 10} / ${pdata.maxHealth}</div><div class="pd-stat-sub"><div style="background:var(--border);border-radius:4px;height:4px;margin-top:4px"><div style="background:#ff4d6d;width:${hpPct}%;height:100%;border-radius:4px"></div></div></div></div>
+      <div class="pd-stat-card"><div class="pd-stat-label">Food</div><div class="pd-stat-value"><span class="pd-stat-icon">🍖</span>${pdata.foodLevel} / 20</div><div class="pd-stat-sub"><div style="background:var(--border);border-radius:4px;height:4px;margin-top:4px"><div style="background:#ffb340;width:${foodPct}%;height:100%;border-radius:4px"></div></div></div></div>
+      <div class="pd-stat-card"><div class="pd-stat-label">XP Level</div><div class="pd-stat-value"><span class="pd-stat-icon">⭐</span>${pdata.xpLevel}</div><div class="pd-stat-sub">${pdata.xpTotal.toLocaleString()} total XP</div></div>
+      <div class="pd-stat-card"><div class="pd-stat-label">Gamemode</div><div class="pd-stat-value"><span class="pd-stat-icon">🎮</span>${escHtml(pdata.gamemode)}</div></div>
+      <div class="pd-stat-card"><div class="pd-stat-label">Position</div><div class="pd-stat-value"><span class="pd-stat-icon">📍</span>${pdata.position.join(', ')}</div><div class="pd-stat-sub">${escHtml(pdata.dimension)}</div></div>
+      <div class="pd-stat-card"><div class="pd-stat-label">Score</div><div class="pd-stat-value"><span class="pd-stat-icon">🏆</span>${pdata.score}</div></div>
+    </div>
+    ${pdata.armor.length ? `<div class="pd-inv-section"><div class="pd-inv-label">Armor</div><div class="pd-armor-grid">${renderArmorSlots(pdata.armor)}</div></div>` : ''}`;
+
+  } else if (tab === 'inventory') {
+    el.innerHTML = `<div class="pd-inv-section"><div class="pd-inv-label">Hotbar (selected: slot ${pdata.selectedSlot})</div><div class="pd-inv-grid">${renderInvSlots(pdata.inventory, 0, 8, pdata.selectedSlot)}</div></div>
+    <div class="pd-inv-section"><div class="pd-inv-label">Main Inventory</div><div class="pd-inv-grid">${renderInvSlots(pdata.inventory, 9, 35)}</div></div>
+    ${pdata.inventory.filter(i => i.slot === -106).length ? `<div class="pd-inv-section"><div class="pd-inv-label">Offhand</div><div class="pd-inv-grid" style="grid-template-columns:1fr;max-width:60px">${renderSingleSlot(pdata.inventory.find(i => i.slot === -106))}</div></div>` : ''}`;
+
+  } else if (tab === 'enderchest') {
+    if (!pdata.enderChest.length) {
+      el.innerHTML = '<div class="pd-loading" style="padding:30px">Ender chest is empty.</div>';
+    } else {
+      el.innerHTML = `<div class="pd-inv-section"><div class="pd-inv-label">Ender Chest (${pdata.enderChest.length} items)</div><div class="pd-inv-grid">${renderInvSlots(pdata.enderChest, 0, 26)}</div></div>`;
+    }
+
+  } else if (tab === 'stats' && pstats && pstats.stats) {
+    const cats = pstats.stats;
+    const CAT_LABELS = {
+      'minecraft:custom': '📊 General',
+      'minecraft:mined': '⛏️ Blocks Mined',
+      'minecraft:crafted': '🔨 Items Crafted',
+      'minecraft:used': '🖐️ Items Used',
+      'minecraft:broken': '💔 Items Broken',
+      'minecraft:picked_up': '📥 Items Picked Up',
+      'minecraft:dropped': '📤 Items Dropped',
+      'minecraft:killed': '⚔️ Mobs Killed',
+      'minecraft:killed_by': '💀 Killed By',
+    };
+
+    let html = '<div class="pd-stats-grid">';
+    for (const [catKey, entries] of Object.entries(cats)) {
+      const sorted = Object.entries(entries).sort((a, b) => b[1] - a[1]).slice(0, 15);
+      if (!sorted.length) continue;
+      const label = CAT_LABELS[catKey] || formatStatKey(catKey);
+      html += `<div class="pd-stats-category"><div class="pd-stats-cat-title">${escHtml(label)}</div><div class="pd-stats-cat-body">`;
+      for (const [k, v] of sorted) {
+        let val = v;
+        // Convert ticks to hours for time stats
+        if (k.includes('time') || k.includes('since')) val = Math.round(v / 20 / 60) + ' min';
+        else if (k.includes('one_cm')) val = (v / 100).toFixed(1) + ' m';
+        else val = formatStatNumber(v);
+        html += `<div class="pd-stat-row"><span class="stat-key">${formatStatKey(k)}</span><span class="stat-val">${val}</span></div>`;
+      }
+      html += '</div></div>';
+    }
+    html += '</div>';
+    el.innerHTML = html;
+  }
+}
+
+function renderInvSlots(items, startSlot, endSlot, selectedSlot) {
+  let html = '';
+  for (let s = startSlot; s <= endSlot; s++) {
+    const item = items.find(i => i.slot === s);
+    html += renderSingleSlot(item, s === selectedSlot);
+  }
+  return html;
+}
+
+function renderSingleSlot(item, isSelected) {
+  if (!item) return `<div class="pd-inv-slot${isSelected ? ' selected' : ''}"></div>`;
+  const icon = getItemIcon(item.id);
+  const name = item.id.length > 10 ? item.id.slice(0, 9) + '…' : item.id;
+  return `<div class="pd-inv-slot has-item${isSelected ? ' selected' : ''}" title="${formatItemName(item.id)} x${item.count}">
+    <span class="item-icon">${icon}</span>
+    <span class="item-name">${escHtml(name)}</span>
+    ${item.count > 1 ? `<span class="item-count">${item.count}</span>` : ''}
+  </div>`;
+}
+
+function renderArmorSlots(armor) {
+  const ARMOR_SLOTS = [
+    { slot: 103, label: 'Helmet' },
+    { slot: 102, label: 'Chest' },
+    { slot: 101, label: 'Legs' },
+    { slot: 100, label: 'Boots' },
+  ];
+  return ARMOR_SLOTS.map(as => {
+    const item = armor.find(a => a.slot === as.slot);
+    return renderSingleSlot(item);
+  }).join('');
+}
+
+// Modal handler (kept for compatibility)
 document.getElementById('modal-cancel').addEventListener('click', () => {
   document.getElementById('modal-overlay').classList.add('hidden');
 });
@@ -1318,25 +1964,25 @@ document.getElementById('modal-confirm').addEventListener('click', confirmAddPla
 document.getElementById('modal-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddPlayer(); });
 
 async function confirmAddPlayer() {
-  const val  = document.getElementById('modal-input').value.trim();
+  const val = document.getElementById('modal-input').value.trim();
   if (!val) return;
-  const tab  = state.currentPtab;
-  const cfg  = PTAB_LABELS[tab];
-  const isIp = tab === 'banned_ips';
-  const list = [...(state.players[tab] || [])];
-
-  const entry = isIp
-    ? { ip: val, reason: 'Banned by MCPanel', created: new Date().toISOString(), expires: 'forever', source: 'MCPanel' }
-    : { uuid: '', name: val };
-
-  list.push(entry);
   document.getElementById('modal-overlay').classList.add('hidden');
 
+  const isBedrock = state.serverType === 'bedrock';
+  const file = isBedrock ? 'allowlist.json' : 'whitelist.json';
+  const entry = isBedrock ? { name: val } : { uuid: '', name: val };
+
   try {
-    await api('PUT', `/api/containers/${state.currentContainer.Id}/players`, { file: cfg.file, data: list });
-    state.players[tab] = list;
-    renderPlayerTab(tab);
-    toast('Added!', 'success');
+    // Read current, append, write back
+    let list = [];
+    try {
+      const res = await api('GET', `/api/containers/${state.currentContainer.Id}/file?path=/data/${file}`);
+      list = JSON.parse(res.content);
+    } catch {}
+    list.push(entry);
+    await api('PUT', `/api/containers/${state.currentContainer.Id}/players`, { file, data: list });
+    toast('Player added!', 'success');
+    loadPlayers(); // Refresh
   } catch (e) { toast(e.message, 'error'); }
 }
 

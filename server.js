@@ -10,6 +10,7 @@ const net = require('net');
 const path = require('path');
 const tar = require('tar-stream');
 const { PassThrough } = require('stream');
+const nbt = require('prismarine-nbt');
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,23 @@ async function readContainerFile(id, filePath) {
   });
 }
 
+async function readContainerFileBuffer(id, filePath) {
+  const container = docker.getContainer(id);
+  const stream = await container.getArchive({ path: filePath });
+  return new Promise((resolve, reject) => {
+    const extract = tar.extract();
+    const chunks = [];
+    extract.on('entry', (header, s, next) => {
+      s.on('data', chunk => chunks.push(chunk));
+      s.on('end', next);
+      s.resume();
+    });
+    extract.on('finish', () => resolve(Buffer.concat(chunks)));
+    extract.on('error', reject);
+    stream.pipe(extract);
+  });
+}
+
 async function writeContainerFile(id, filePath, content) {
   const container = docker.getContainer(id);
   const dir      = path.dirname(filePath);
@@ -160,6 +178,33 @@ async function writeContainerFile(id, filePath, content) {
   pack.entry({ name: filename, size: Buffer.byteLength(content) }, content);
   pack.finalize();
   await container.putArchive(pack, { path: dir });
+}
+
+async function listContainerDir(id, dirPath) {
+  const container = docker.getContainer(id);
+  const stream = await container.getArchive({ path: dirPath });
+  return new Promise((resolve, reject) => {
+    const extract = tar.extract();
+    const files = [];
+    extract.on('entry', (header, s, next) => {
+      if (header.type === 'file') files.push(header.name);
+      s.on('end', next);
+      s.resume();
+    });
+    extract.on('finish', () => resolve(files));
+    extract.on('error', reject);
+    stream.pipe(extract);
+  });
+}
+
+async function getWorldFolder(id) {
+  try {
+    const props = await readContainerFile(id, '/data/server.properties');
+    const match = props.match(/^level-name\s*=\s*(.+)$/m);
+    return match ? match[1].trim() : 'world';
+  } catch {
+    return 'world';
+  }
 }
 
 // Read file
@@ -236,6 +281,237 @@ app.put('/api/containers/:id/players', auth, async (req, res) => {
   try {
     await writeContainerFile(req.params.id, `/data/${file}`, JSON.stringify(data, null, 2));
     res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── All-players discovery & player data inspection ──────────────────────────
+
+app.get('/api/containers/:id/all-players', auth, async (req, res) => {
+  const { type = 'java' } = req.query;
+  const id = req.params.id;
+
+  try {
+    if (type === 'bedrock') {
+      // Bedrock: merge allowlist + permissions
+      let allowlist = [], permissions = [];
+      try { allowlist = JSON.parse(await readContainerFile(id, '/data/allowlist.json')); } catch {}
+      try { permissions = JSON.parse(await readContainerFile(id, '/data/permissions.json')); } catch {}
+
+      const playerMap = {};
+      for (const p of allowlist) {
+        const key = p.name || p.xuid || 'unknown';
+        playerMap[key] = {
+          name: p.name || 'Unknown',
+          xuid: p.xuid || '',
+          allowlisted: true,
+          permission: 'member',
+        };
+      }
+      for (const p of permissions) {
+        const key = p.xuid || p.name || 'unknown';
+        if (playerMap[key]) {
+          playerMap[key].permission = p.permission || 'member';
+        } else {
+          playerMap[key] = {
+            name: p.name || p.xuid || 'Unknown',
+            xuid: p.xuid || '',
+            allowlisted: false,
+            permission: p.permission || 'member',
+          };
+        }
+      }
+
+      res.json({
+        players: Object.values(playerMap),
+        hasPlayerData: false,
+      });
+    } else {
+      // Java: merge usercache + whitelist + ops + bans + playerdata folder
+      const playerMap = {};
+      const world = await getWorldFolder(id);
+
+      // 1. usercache.json — all players who ever joined
+      try {
+        const ucRaw = await readContainerFile(id, '/data/usercache.json');
+        const ucList = JSON.parse(ucRaw);
+        for (const p of ucList) {
+          if (!p.uuid) continue;
+          playerMap[p.uuid] = {
+            name: p.name,
+            uuid: p.uuid,
+            expiresOn: p.expiresOn || null,
+            whitelisted: false,
+            op: false,
+            opLevel: 0,
+            banned: false,
+            banReason: '',
+            hasData: false,
+          };
+        }
+      } catch {}
+
+      // 2. Scan playerdata folder for UUIDs with .dat files
+      try {
+        const datFiles = await listContainerDir(id, `/data/${world}/playerdata/`);
+        for (const f of datFiles) {
+          const base = path.basename(f);
+          if (!base.endsWith('.dat')) continue;
+          const uuid = base.replace('.dat', '');
+          if (!playerMap[uuid]) {
+            playerMap[uuid] = {
+              name: uuid.slice(0, 8) + '…',
+              uuid,
+              whitelisted: false,
+              op: false,
+              opLevel: 0,
+              banned: false,
+              banReason: '',
+              hasData: true,
+            };
+          } else {
+            playerMap[uuid].hasData = true;
+          }
+        }
+      } catch {}
+
+      // 3. Whitelist
+      try {
+        const wl = JSON.parse(await readContainerFile(id, '/data/whitelist.json'));
+        for (const p of wl) {
+          if (p.uuid && playerMap[p.uuid]) {
+            playerMap[p.uuid].whitelisted = true;
+            if (p.name) playerMap[p.uuid].name = p.name;
+          } else if (p.uuid) {
+            playerMap[p.uuid] = {
+              name: p.name || p.uuid.slice(0, 8) + '…',
+              uuid: p.uuid,
+              whitelisted: true, op: false, opLevel: 0,
+              banned: false, banReason: '', hasData: false,
+            };
+          }
+        }
+      } catch {}
+
+      // 4. Ops
+      try {
+        const ops = JSON.parse(await readContainerFile(id, '/data/ops.json'));
+        for (const p of ops) {
+          if (p.uuid && playerMap[p.uuid]) {
+            playerMap[p.uuid].op = true;
+            playerMap[p.uuid].opLevel = p.level || 4;
+            if (p.name) playerMap[p.uuid].name = p.name;
+          } else if (p.uuid) {
+            playerMap[p.uuid] = {
+              name: p.name || p.uuid.slice(0, 8) + '…',
+              uuid: p.uuid,
+              whitelisted: false, op: true, opLevel: p.level || 4,
+              banned: false, banReason: '', hasData: false,
+            };
+          }
+        }
+      } catch {}
+
+      // 5. Bans
+      try {
+        const bans = JSON.parse(await readContainerFile(id, '/data/banned-players.json'));
+        for (const p of bans) {
+          if (p.uuid && playerMap[p.uuid]) {
+            playerMap[p.uuid].banned = true;
+            playerMap[p.uuid].banReason = p.reason || '';
+            if (p.name) playerMap[p.uuid].name = p.name;
+          } else if (p.uuid) {
+            playerMap[p.uuid] = {
+              name: p.name || p.uuid.slice(0, 8) + '…',
+              uuid: p.uuid,
+              whitelisted: false, op: false, opLevel: 0,
+              banned: true, banReason: p.reason || '', hasData: false,
+            };
+          }
+        }
+      } catch {}
+
+      res.json({
+        players: Object.values(playerMap),
+        hasPlayerData: true,
+        worldFolder: world,
+      });
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Player NBT data (Java only)
+app.get('/api/containers/:id/player-data/:uuid', auth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const uuid = req.params.uuid;
+    const world = await getWorldFolder(id);
+    const datPath = `/data/${world}/playerdata/${uuid}.dat`;
+
+    const buf = await readContainerFileBuffer(id, datPath);
+    const { parsed } = await nbt.parse(buf);
+    const data = nbt.simplify(parsed);
+
+    // Extract key fields
+    const GAMEMODES = ['Survival', 'Creative', 'Adventure', 'Spectator'];
+    const DIMENSIONS = {
+      'minecraft:overworld': 'Overworld',
+      'minecraft:the_nether': 'Nether',
+      'minecraft:the_end': 'The End',
+      0: 'Overworld', '-1': 'Nether', 1: 'The End',
+    };
+
+    const result = {
+      health: data.Health ?? 20,
+      maxHealth: 20,
+      foodLevel: data.foodLevel ?? 20,
+      foodSaturation: data.foodSaturationLevel ?? 5,
+      xpLevel: data.XpLevel ?? 0,
+      xpTotal: data.XpTotal ?? 0,
+      score: data.Score ?? 0,
+      gamemode: GAMEMODES[data.playerGameType] || `Unknown (${data.playerGameType})`,
+      dimension: DIMENSIONS[data.Dimension] || data.Dimension || 'Unknown',
+      position: data.Pos ? data.Pos.map(v => Math.round(v)) : [0, 0, 0],
+      inventory: (data.Inventory || []).map(item => ({
+        slot: item.Slot,
+        id: (item.id || '').replace('minecraft:', ''),
+        count: item.Count || item.count || 1,
+        damage: item.Damage || 0,
+      })),
+      enderChest: (data.EnderItems || []).map(item => ({
+        slot: item.Slot,
+        id: (item.id || '').replace('minecraft:', ''),
+        count: item.Count || item.count || 1,
+        damage: item.Damage || 0,
+      })),
+      armor: [],
+      selectedSlot: data.SelectedItemSlot ?? 0,
+    };
+
+    // Separate armor from inventory (slots 100-103)
+    result.armor = result.inventory.filter(i => i.slot >= 100 && i.slot <= 103);
+    result.inventory = result.inventory.filter(i => i.slot >= 0 && i.slot < 100);
+
+    res.json(result);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Player stats (Java only — already JSON)
+app.get('/api/containers/:id/player-stats/:uuid', auth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const uuid = req.params.uuid;
+    const world = await getWorldFolder(id);
+    const statsPath = `/data/${world}/stats/${uuid}.json`;
+
+    const raw = await readContainerFile(id, statsPath);
+    const data = JSON.parse(raw);
+    res.json(data);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
