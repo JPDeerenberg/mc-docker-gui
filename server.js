@@ -28,7 +28,6 @@ const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server, path: '/ws/logs' });
 
 app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
 
 // Serve index.html for root
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
