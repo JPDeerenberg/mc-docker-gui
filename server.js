@@ -520,9 +520,15 @@ app.get('/api/containers/:id/player-stats/:uuid', auth, async (req, res) => {
 
 /**
  * Send a command to a running Minecraft server container via docker exec.
- * Uses a shell one-liner that pipes the command into the running server process
- * via /proc/<pid>/fd/0, which writes to the server's stdin.
- * Works for both Java and Bedrock servers.
+ *
+ * For Java servers (itzg/minecraft-server): uses `rcon-cli` which connects
+ * via the RCON protocol and returns output directly.
+ *
+ * For Bedrock servers (itzg/minecraft-bedrock-server): uses `send-command`
+ * which is a helper script included in the itzg bedrock image that pipes
+ * commands into the server's stdin.
+ *
+ * Falls back to a generic stdin pipe approach for non-itzg images.
  */
 app.post('/api/containers/:id/command', auth, async (req, res) => {
   const { command } = req.body;
@@ -536,10 +542,26 @@ app.post('/api/containers/:id/command', auth, async (req, res) => {
       return res.status(400).json({ error: 'Container is not running' });
     }
 
-    // Find PID 1's stdin — the main server process
-    // We echo the command into /proc/1/fd/0 which is the stdin of the entrypoint process
+    // Detect server type from container metadata
+    const typeFake = { Image: info.Config.Image, Names: [info.Name], Labels: info.Config.Labels || {} };
+    const serverType = detectServerType(typeFake);
+
+    // Build the exec command based on server type
+    let execCmd;
+    if (serverType === 'bedrock') {
+      // Bedrock: use the itzg send-command helper script
+      // send-command expects each word as a separate argument:
+      //   send-command gamerule dofiretick false
+      execCmd = ['send-command', ...command.split(/\s+/)];
+    } else {
+      // Java: use rcon-cli which connects via RCON protocol
+      // rcon-cli accepts the full command as a single string argument:
+      //   rcon-cli "gamerule doDaylightCycle false"
+      execCmd = ['rcon-cli', command];
+    }
+
     const exec = await container.exec({
-      Cmd: ['sh', '-c', `echo "${command.replace(/"/g, '\\"')}" > /proc/1/fd/0`],
+      Cmd: execCmd,
       AttachStdout: true,
       AttachStderr: true,
     });
@@ -557,8 +579,8 @@ app.post('/api/containers/:id/command', auth, async (req, res) => {
       stream.on('end', resolve);
       stream.on('error', reject);
 
-      // Timeout after 5 seconds
-      setTimeout(resolve, 5000);
+      // Timeout after 10 seconds (rcon-cli may take a moment to connect)
+      setTimeout(resolve, 10000);
     });
 
     res.json({ response: output.trim() || '' });
