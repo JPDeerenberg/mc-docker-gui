@@ -6,7 +6,6 @@ const WebSocket = require('ws');
 const Docker = require('dockerode');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const net = require('net');
 const path = require('path');
 const tar = require('tar-stream');
 const { PassThrough } = require('stream');
@@ -517,78 +516,52 @@ app.get('/api/containers/:id/player-stats/:uuid', auth, async (req, res) => {
   }
 });
 
-// ─── RCON ────────────────────────────────────────────────────────────────────
+// ─── Docker exec command ──────────────────────────────────────────────────────
 
-function rconPacket(id, type, payload) {
-  const body = Buffer.from(payload, 'utf8');
-  const buf  = Buffer.alloc(4 + 4 + 4 + body.length + 2);
-  buf.writeInt32LE(4 + 4 + body.length + 2, 0); // length (excl. length field)
-  buf.writeInt32LE(id,   4);
-  buf.writeInt32LE(type, 8);
-  body.copy(buf, 12);
-  buf.writeUInt8(0, 12 + body.length);
-  buf.writeUInt8(0, 13 + body.length);
-  return buf;
-}
-
-function sendRcon(host, port, password, command) {
-  return new Promise((resolve, reject) => {
-    const sock    = new net.Socket();
-    let   rxBuf   = Buffer.alloc(0);
-    let   authed  = false;
-    const CMD_ID  = 2;
-
-    const timer = setTimeout(() => { sock.destroy(); reject(new Error('RCON timeout')); }, 6000);
-
-    sock.connect(port, host, () => sock.write(rconPacket(1, 3, password)));
-
-    sock.on('data', chunk => {
-      rxBuf = Buffer.concat([rxBuf, chunk]);
-      while (rxBuf.length >= 12) {
-        const len   = rxBuf.readInt32LE(0);
-        const total = len + 4;
-        if (rxBuf.length < total) break;
-        const id      = rxBuf.readInt32LE(4);
-        const payload = rxBuf.slice(12, total - 2).toString('utf8');
-        rxBuf = rxBuf.slice(total);
-
-        if (!authed) {
-          if (id === -1) { clearTimeout(timer); sock.destroy(); reject(new Error('RCON auth failed — check password')); return; }
-          authed = true;
-          sock.write(rconPacket(CMD_ID, 2, command));
-        } else {
-          clearTimeout(timer);
-          sock.destroy();
-          resolve(payload);
-        }
-      }
-    });
-
-    sock.on('error', err => { clearTimeout(timer); reject(err); });
-  });
-}
-
-app.post('/api/containers/:id/rcon', auth, async (req, res) => {
+/**
+ * Send a command to a running Minecraft server container via docker exec.
+ * Uses a shell one-liner that pipes the command into the running server process
+ * via /proc/<pid>/fd/0, which writes to the server's stdin.
+ * Works for both Java and Bedrock servers.
+ */
+app.post('/api/containers/:id/command', auth, async (req, res) => {
   const { command } = req.body;
   if (!command) return res.status(400).json({ error: 'command required' });
   try {
-    const info  = await docker.getContainer(req.params.id).inspect();
-    const typeFake = { Image: info.Config.Image, Names: [info.Name], Labels: info.Config.Labels || {} };
-    if (detectServerType(typeFake) === 'bedrock') {
-      return res.status(400).json({ error: 'Bedrock servers do not support RCON' });
+    const container = docker.getContainer(req.params.id);
+    const info = await container.inspect();
+
+    // Make sure the container is running
+    if (!info.State.Running) {
+      return res.status(400).json({ error: 'Container is not running' });
     }
 
-    const envMap = Object.fromEntries((info.Config.Env || []).map(e => {
-      const i = e.indexOf('=');
-      return [e.slice(0, i), e.slice(i + 1)];
-    }));
-    const rconPort  = parseInt(envMap.RCON_PORT  || '25575');
-    const rconPass  = envMap.RCON_PASSWORD || '';
-    const networks  = info.NetworkSettings.Networks;
-    const ip        = Object.values(networks)[0]?.IPAddress || '127.0.0.1';
+    // Find PID 1's stdin — the main server process
+    // We echo the command into /proc/1/fd/0 which is the stdin of the entrypoint process
+    const exec = await container.exec({
+      Cmd: ['sh', '-c', `echo "${command.replace(/"/g, '\\"')}" > /proc/1/fd/0`],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
 
-    const response = await sendRcon(ip, rconPort, rconPass, command);
-    res.json({ response });
+    const stream = await exec.start({ Detach: false });
+    let output = '';
+
+    await new Promise((resolve, reject) => {
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
+      docker.modem.demuxStream(stream, stdout, stderr);
+
+      stdout.on('data', chunk => { output += chunk.toString('utf8'); });
+      stderr.on('data', chunk => { output += chunk.toString('utf8'); });
+      stream.on('end', resolve);
+      stream.on('error', reject);
+
+      // Timeout after 5 seconds
+      setTimeout(resolve, 5000);
+    });
+
+    res.json({ response: output.trim() || '' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

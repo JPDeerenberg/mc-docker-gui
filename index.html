@@ -365,16 +365,7 @@
   .send-btn:hover { background: #00ffb3; }
   .send-btn:disabled { opacity:.4; cursor:not-allowed; }
 
-  .rcon-notice {
-    margin-top: 10px; padding: 10px 14px;
-    background: rgba(255,179,64,.08); border: 1px solid rgba(255,179,64,.2);
-    border-radius: var(--radius); color: var(--amber); font-size: 12px;
-  }
-  .bedrock-notice {
-    margin-top: 10px; padding: 10px 14px;
-    background: rgba(255,159,67,.08); border: 1px solid rgba(255,159,67,.25);
-    border-radius: var(--radius); color: var(--bedrock); font-size: 12px;
-  }
+
   /* Console auto-scroll toggle */
   .autoscroll-btn {
     padding: 3px 10px; background: var(--surface); border: 1px solid var(--border2);
@@ -885,12 +876,7 @@
           <button class="send-btn" id="cmd-send">Send</button>
         </div>
       </div>
-      <div class="rcon-notice hidden" id="rcon-notice">
-        ⚠ RCON unavailable — set <code>ENABLE_RCON=true</code>, <code>RCON_PORT</code> and <code>RCON_PASSWORD</code> on your Minecraft container to enable command sending.
-      </div>
-      <div class="bedrock-notice hidden" id="bedrock-notice">
-        🪨 Bedrock Edition — RCON is not supported. Use the console logs to monitor your server.
-      </div>
+
     </div>
 
     <!-- Settings -->
@@ -970,7 +956,7 @@ const state = {
   currentPtab: 'whitelist',
   propsRaw: '',
   wsConn: null,
-  rconAvail: true,
+
   autoScroll: true,
   cmdHistory: [],
   cmdHistoryIdx: -1,
@@ -1172,15 +1158,12 @@ async function openContainer(id) {
     document.getElementById('btn-stop').disabled    = !running;
     document.getElementById('btn-restart').disabled = !running;
 
-    // Show/hide bedrock notice, disable command input for Bedrock
-    const isBedrock = state.serverType === 'bedrock';
-    document.getElementById('bedrock-notice').classList.toggle('hidden', !isBedrock);
-    document.getElementById('rcon-notice').classList.add('hidden');
+    // Enable command input for all server types (using docker exec)
     const cmdInput = document.getElementById('cmd-input');
     const cmdSend  = document.getElementById('cmd-send');
-    cmdInput.disabled = isBedrock;
-    cmdSend.disabled  = isBedrock;
-    cmdInput.placeholder = isBedrock ? 'RCON not available for Bedrock servers' : 'Type a command and press Enter…';
+    cmdInput.disabled = false;
+    cmdSend.disabled  = false;
+    cmdInput.placeholder = 'Type a command and press Enter…';
 
     // Switch to console tab
     switchTab('console');
@@ -1296,27 +1279,22 @@ document.getElementById('copy-log').addEventListener('click', () => {
 });
 
 // ══════════════════════════════════════════════
-//  RCON COMMAND
+//  SEND COMMAND (via docker exec)
 // ══════════════════════════════════════════════
 async function sendCommand() {
   const input = document.getElementById('cmd-input');
   const cmd   = input.value.trim();
-  if (!cmd || state.serverType === 'bedrock') return;
+  if (!cmd) return;
   state.cmdHistory.unshift(cmd);
   if (state.cmdHistory.length > 50) state.cmdHistory.pop();
   state.cmdHistoryIdx = -1;
   input.value = '';
   appendLog(`> ${cmd}`, 'info');
   try {
-    const res = await api('POST', `/api/containers/${state.currentContainer.Id}/rcon`, { command: cmd });
+    const res = await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: cmd });
     if (res.response) appendLog(res.response, 'info');
-    document.getElementById('rcon-notice').classList.add('hidden');
-    state.rconAvail = true;
   } catch (e) {
-    if (!state.rconAvail) return;
-    state.rconAvail = false;
-    document.getElementById('rcon-notice').classList.remove('hidden');
-    appendLog(`[RCON error: ${e.message}]`, 'stderr');
+    appendLog(`[Error: ${e.message}]`, 'stderr');
   }
 }
 
@@ -1435,7 +1413,7 @@ const SECTIONS = {
   world:    { label: 'World', icon: '🌍' },
   players:  { label: 'Players', icon: '👥' },
   network:  { label: 'Network', icon: '🌐' },
-  rcon:     { label: 'RCON', icon: '🔌' },
+  rcon:     { label: 'Remote Console', icon: '🔌' },
   advanced: { label: 'Advanced', icon: '🔧' },
   other:    { label: 'Other', icon: '📋' },
 };
