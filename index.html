@@ -721,6 +721,26 @@
   .empty-players .emoji { font-size: 36px; display: block; margin-bottom: 10px; }
   .empty-players h3 { font-size: 15px; color: var(--text); margin-bottom: 6px; }
 
+  /* Player action buttons */
+  .pc-act-btn {
+    padding: 3px 8px; font-size: 10px; font-weight: 700; border-radius: 6px;
+    cursor: pointer; border: none; transition: all .15s; white-space: nowrap;
+    font-family: 'Outfit', sans-serif; letter-spacing: .02em;
+  }
+  .pc-act-btn.add {
+    background: rgba(0,229,160,.1); color: var(--green); border: 1px solid rgba(0,229,160,.25);
+  }
+  .pc-act-btn.add:hover { background: rgba(0,229,160,.2); }
+  .pc-act-btn.remove {
+    background: rgba(255,179,64,.08); color: var(--amber); border: 1px solid rgba(255,179,64,.2);
+  }
+  .pc-act-btn.remove:hover { background: rgba(255,179,64,.18); }
+  .pc-act-btn.ban {
+    background: rgba(255,77,109,.08); color: var(--red); border: 1px solid rgba(255,77,109,.2);
+  }
+  .pc-act-btn.ban:hover { background: rgba(255,77,109,.18); }
+  .pc-act-btn:disabled { opacity: .5; cursor: not-allowed; }
+
   /* Add player modal */
   .modal-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
@@ -889,8 +909,12 @@
               <button class="stab-btn active" data-stab="visual">Visual</button>
               <button class="stab-btn"        data-stab="raw">Raw</button>
             </div>
-            <button class="save-btn" id="save-settings">Save</button>
+            <button class="save-btn" id="save-settings" style="background:var(--surface);border:1px solid var(--border);color:var(--text)">Save</button>
+            <button class="save-btn" id="save-restart-settings">Save & Restart</button>
           </div>
+        </div>
+        <div class="bedrock-data-notice" id="settings-itzg-notice" style="margin-bottom:16px;background:rgba(77,159,255,.06);border-color:rgba(77,159,255,.2);color:var(--blue)">
+          ℹ️ <strong>Docker Note</strong> — If using an itzg image, settings are generated from environment variables on container start. Changes saved here persist through restarts, but may be overwritten if the container is recreated. For permanent changes, update your <code>docker-compose.yml</code> environment variables.
         </div>
         <div id="settings-visual">
           <div id="props-grid"></div>
@@ -908,10 +932,11 @@
         <div class="players-toolbar">
           <input type="text" class="players-search" id="players-search" placeholder="Search players…">
           <span class="players-count" id="players-count"></span>
+          <button class="save-btn" id="add-player-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0">+ Add Player</button>
         </div>
         <div class="player-filter-tabs" id="player-filter-tabs"></div>
         <div class="bedrock-data-notice hidden" id="bedrock-data-notice">
-          🪨 <strong>Bedrock Edition</strong> — Player data (inventory, health, XP) is stored in a LevelDB database and cannot be inspected from outside the container. Showing allowlist and permissions only.
+          🪨 <strong>Bedrock Edition</strong> — Player data (inventory, health, XP) is stored in LevelDB and cannot be inspected. Use the action buttons below to manage allowlist and permissions via server commands.
         </div>
         <div id="players-list-container"></div>
       </div>
@@ -1322,6 +1347,12 @@ async function loadSettings() {
   const grid = document.getElementById('props-grid');
   const raw  = document.getElementById('raw-props');
   grid.innerHTML = '<div style="color:var(--text2);display:flex;align-items:center;gap:8px;padding:8px"><span class="loader"></span> Loading…</div>';
+
+  // Show itzg notice only for itzg images
+  const img = (state.currentContainer?.Config?.Image || '').toLowerCase();
+  const isItzg = img.includes('itzg');
+  document.getElementById('settings-itzg-notice').classList.toggle('hidden', !isItzg);
+
   try {
     const res = await api('GET', `/api/containers/${state.currentContainer.Id}/file?path=/data/server.properties`);
     state.propsRaw = res.content;
@@ -1343,8 +1374,8 @@ function parseProps(raw) {
 }
 
 // Property metadata: type, label, description, options, section
-const PROP_META = {
-  // ── General ──
+// ── Java Edition ──
+const JAVA_PROP_META = {
   'server-name':       { section: 'general', label: 'Server Name', desc: 'The name shown in the server list', type: 'text' },
   'motd':              { section: 'general', label: 'Message of the Day', desc: 'Displayed below the server name in the multiplayer list', type: 'text' },
   'server-port':       { section: 'general', label: 'Server Port', desc: 'Port the server listens on', type: 'number', min: 1, max: 65535 },
@@ -1356,8 +1387,6 @@ const PROP_META = {
   'difficulty':        { section: 'general', label: 'Difficulty', desc: 'Server difficulty level', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'] },
   'force-gamemode':    { section: 'general', label: 'Force Gamemode', desc: 'Force players into the default gamemode when joining', type: 'toggle' },
   'hardcore':          { section: 'general', label: 'Hardcore', desc: 'Players are set to spectator mode upon death', type: 'toggle' },
-
-  // ── World ──
   'generate-structures':    { section: 'world', label: 'Generate Structures', desc: 'Generate villages, strongholds, mineshafts, etc.', type: 'toggle' },
   'allow-nether':           { section: 'world', label: 'Allow Nether', desc: 'Allow players to travel to the Nether', type: 'toggle' },
   'spawn-monsters':         { section: 'world', label: 'Spawn Monsters', desc: 'Hostile mobs will spawn in the world', type: 'toggle' },
@@ -1368,8 +1397,6 @@ const PROP_META = {
   'max-build-height':       { section: 'world', label: 'Max Build Height', desc: 'Maximum height (Y level) players can build at', type: 'number', min: 1, max: 320 },
   'view-distance':          { section: 'world', label: 'View Distance', desc: 'Amount of chunks sent to each player (3–32)', type: 'number', min: 3, max: 32 },
   'simulation-distance':    { section: 'world', label: 'Simulation Distance', desc: 'Chunk distance that entities are ticked (3–32)', type: 'number', min: 3, max: 32 },
-
-  // ── Players ──
   'pvp':                    { section: 'players', label: 'PvP', desc: 'Allow players to fight each other', type: 'toggle' },
   'allow-flight':           { section: 'players', label: 'Allow Flight', desc: 'Allow survival players to fly (with mods)', type: 'toggle' },
   'white-list':             { section: 'players', label: 'Whitelist', desc: 'Only whitelisted players can join', type: 'toggle' },
@@ -1377,8 +1404,6 @@ const PROP_META = {
   'online-mode':            { section: 'players', label: 'Online Mode', desc: 'Verify players against Mojang accounts. Disable for offline/cracked servers', type: 'toggle' },
   'player-idle-timeout':    { section: 'players', label: 'Idle Timeout', desc: 'Minutes before idle players are kicked (0 = disabled)', type: 'number', min: 0, max: 9999 },
   'op-permission-level':    { section: 'players', label: 'OP Permission Level', desc: 'Default permission level for operators (1–4)', type: 'select', options: ['1', '2', '3', '4'] },
-
-  // ── Network ──
   'server-ip':              { section: 'network', label: 'Server IP', desc: 'IP address to bind to (leave blank for all interfaces)', type: 'text' },
   'network-compression-threshold': { section: 'network', label: 'Compression Threshold', desc: 'Packet size threshold before compression (-1 to disable)', type: 'number', min: -1, max: 65535 },
   'rate-limit':             { section: 'network', label: 'Rate Limit', desc: 'Max packets per second per player (0 = disabled)', type: 'number', min: 0, max: 99999 },
@@ -1386,15 +1411,11 @@ const PROP_META = {
   'enable-query':           { section: 'network', label: 'Enable Query', desc: 'Enable GameSpy4 query protocol', type: 'toggle' },
   'query.port':             { section: 'network', label: 'Query Port', desc: 'Port for the GameSpy4 query protocol', type: 'number', min: 1, max: 65535 },
   'enable-status':          { section: 'network', label: 'Enable Status', desc: 'Show server in the multiplayer server list', type: 'toggle' },
-
-  // ── RCON ──
   'enable-rcon':            { section: 'rcon', label: 'Enable RCON', desc: 'Enable remote console access', type: 'toggle' },
   'rcon.port':              { section: 'rcon', label: 'RCON Port', desc: 'Port for the RCON protocol', type: 'number', min: 1, max: 65535 },
   'rcon.password':          { section: 'rcon', label: 'RCON Password', desc: 'Password for RCON connections', type: 'text' },
   'broadcast-rcon-to-ops':  { section: 'rcon', label: 'Broadcast RCON to OPs', desc: 'Show RCON command output to operators', type: 'toggle' },
   'broadcast-console-to-ops': { section: 'rcon', label: 'Broadcast Console to OPs', desc: 'Show console output to operators', type: 'toggle' },
-
-  // ── Advanced ──
   'enable-command-block':    { section: 'advanced', label: 'Command Blocks', desc: 'Allow command blocks to function', type: 'toggle' },
   'function-permission-level': { section: 'advanced', label: 'Function Permission Level', desc: 'Permission level for data packs (1–4)', type: 'select', options: ['1', '2', '3', '4'] },
   'sync-chunk-writes':      { section: 'advanced', label: 'Sync Chunk Writes', desc: 'Write chunks synchronously to disk', type: 'toggle' },
@@ -1408,7 +1429,35 @@ const PROP_META = {
   'log-ips':                 { section: 'advanced', label: 'Log IPs', desc: 'Log player IP addresses in the server log', type: 'toggle' },
 };
 
-const SECTIONS = {
+// ── Bedrock Edition ──
+const BEDROCK_PROP_META = {
+  'server-name':       { section: 'general', label: 'Server Name', desc: 'The name shown in the server list', type: 'text' },
+  'gamemode':          { section: 'general', label: 'Default Gamemode', desc: 'Gamemode assigned to new players', type: 'select', options: ['survival', 'creative', 'adventure'] },
+  'difficulty':        { section: 'general', label: 'Difficulty', desc: 'Server difficulty level', type: 'select', options: ['peaceful', 'easy', 'normal', 'hard'] },
+  'max-players':       { section: 'general', label: 'Max Players', desc: 'Maximum number of players that can join', type: 'number', min: 1, max: 1000 },
+  'force-gamemode':    { section: 'general', label: 'Force Gamemode', desc: 'Force players into the default gamemode when joining', type: 'toggle' },
+  'allow-cheats':      { section: 'general', label: 'Allow Cheats', desc: 'Allow the use of cheat commands', type: 'toggle' },
+  'default-player-permission-level': { section: 'general', label: 'Default Permission Level', desc: 'Permission level for new players', type: 'select', options: ['visitor', 'member', 'operator'] },
+  'level-name':        { section: 'world', label: 'World Name', desc: 'Name of the world folder in the worlds/ directory', type: 'text' },
+  'level-seed':        { section: 'world', label: 'World Seed', desc: 'Seed used for world generation (leave blank for random)', type: 'text' },
+  'view-distance':     { section: 'world', label: 'View Distance', desc: 'Maximum number of chunks sent to the client', type: 'number', min: 5, max: 48 },
+  'tick-distance':     { section: 'world', label: 'Tick Distance', desc: 'Radius (in chunks) around players that will be actively ticked (4–12)', type: 'number', min: 4, max: 12 },
+  'texturepack-required': { section: 'world', label: 'Require Texture Pack', desc: 'Require players to accept the server texture pack to join', type: 'toggle' },
+  'online-mode':       { section: 'players', label: 'Online Mode', desc: 'Require Xbox Live authentication for players', type: 'toggle' },
+  'allow-list':        { section: 'players', label: 'Allowlist', desc: 'Only players in the allowlist can join', type: 'toggle' },
+  'player-idle-timeout': { section: 'players', label: 'Idle Timeout', desc: 'Minutes before idle players are kicked (0 = disabled)', type: 'number', min: 0, max: 9999 },
+  'server-port':       { section: 'network', label: 'Server Port (IPv4)', desc: 'IPv4 port the server listens on (default: 19132)', type: 'number', min: 1, max: 65535 },
+  'server-portv6':     { section: 'network', label: 'Server Port (IPv6)', desc: 'IPv6 port the server listens on (default: 19133)', type: 'number', min: 1, max: 65535 },
+  'compression-threshold': { section: 'network', label: 'Compression Threshold', desc: 'Raw network payload size before compression is applied', type: 'number', min: 0, max: 65535 },
+  'compression-algorithm': { section: 'network', label: 'Compression Algorithm', desc: 'Algorithm used for network compression', type: 'select', options: ['zlib', 'snappy'] },
+  'max-threads':       { section: 'network', label: 'Max Threads', desc: 'Maximum threads the server will use (0 = unlimited)', type: 'number', min: 0, max: 128 },
+  'server-authoritative-movement': { section: 'advanced', label: 'Authoritative Movement', desc: 'How much authority the server has over player movement', type: 'select', options: ['client-auth', 'server-auth', 'server-auth-with-rewind'] },
+  'server-authoritative-block-breaking': { section: 'advanced', label: 'Authoritative Block Breaking', desc: 'Server verifies block mining operations', type: 'toggle' },
+  'chat-restriction':  { section: 'advanced', label: 'Chat Restriction', desc: 'Controls chat UI/functionality', type: 'select', options: ['None', 'Dropped', 'Disabled'] },
+  'content-log-file-enabled': { section: 'advanced', label: 'Content Log File', desc: 'Enable logging of content errors to a file', type: 'toggle' },
+};
+
+const JAVA_SECTIONS = {
   general:  { label: 'General', icon: '⚙️' },
   world:    { label: 'World', icon: '🌍' },
   players:  { label: 'Players', icon: '👥' },
@@ -1418,24 +1467,38 @@ const SECTIONS = {
   other:    { label: 'Other', icon: '📋' },
 };
 
+const BEDROCK_SECTIONS = {
+  general:  { label: 'General', icon: '⚙️' },
+  world:    { label: 'World', icon: '🌍' },
+  players:  { label: 'Players', icon: '👥' },
+  network:  { label: 'Network', icon: '🌐' },
+  advanced: { label: 'Advanced', icon: '🔧' },
+  other:    { label: 'Other', icon: '📋' },
+};
+
+function getActivePropMeta() { return state.serverType === 'bedrock' ? BEDROCK_PROP_META : JAVA_PROP_META; }
+function getActiveSections() { return state.serverType === 'bedrock' ? BEDROCK_SECTIONS : JAVA_SECTIONS; }
+
 function renderProps(raw) {
   const container = document.getElementById('props-grid');
   const props = parseProps(raw);
   if (!props.length) { container.innerHTML = '<div style="color:var(--text2);padding:8px">No properties found.</div>'; return; }
 
   // Group props by section
+  const activeMeta = getActivePropMeta();
+  const activeSections = getActiveSections();
   const grouped = {};
-  for (const sec of Object.keys(SECTIONS)) grouped[sec] = [];
+  for (const sec of Object.keys(activeSections)) grouped[sec] = [];
 
   props.forEach(([k, v]) => {
-    const meta = PROP_META[k];
+    const meta = activeMeta[k];
     const sec = meta?.section || 'other';
     if (!grouped[sec]) grouped[sec] = [];
     grouped[sec].push([k, v, meta]);
   });
 
   let html = '';
-  for (const [secKey, secInfo] of Object.entries(SECTIONS)) {
+  for (const [secKey, secInfo] of Object.entries(activeSections)) {
     const items = grouped[secKey];
     if (!items || !items.length) continue;
 
@@ -1525,48 +1588,61 @@ function renderPropRow(key, value, meta) {
   </div>`;
 }
 
+async function collectSettingsContent() {
+  const rawView = !document.getElementById('settings-raw').classList.contains('hidden');
+  if (rawView) return document.getElementById('raw-props').value;
+  const lines = state.propsRaw.split('\n');
+  const updated = {};
+  document.querySelectorAll('#props-grid input[data-key][type="text"], #props-grid input[data-key][type="number"], #props-grid input[data-key][type="hidden"]').forEach(inp => {
+    updated[inp.dataset.key] = inp.value;
+  });
+  document.querySelectorAll('#props-grid select[data-key]').forEach(sel => {
+    updated[sel.dataset.key] = sel.value;
+  });
+  return lines.map(l => {
+    if (l.trim().startsWith('#') || !l.trim()) return l;
+    const i = l.indexOf('=');
+    if (i < 0) return l;
+    const k = l.slice(0, i).trim();
+    return updated[k] !== undefined ? `${k}=${updated[k]}` : l;
+  }).join('\n');
+}
+
+async function saveSettings() {
+  const content = await collectSettingsContent();
+  await api('PUT', `/api/containers/${state.currentContainer.Id}/file`, {
+    path: '/data/server.properties', content,
+  });
+  state.propsRaw = content;
+}
+
 document.getElementById('save-settings').addEventListener('click', async () => {
   const btn = document.getElementById('save-settings');
   btn.disabled = true; btn.textContent = 'Saving…';
-
-  const rawView = !document.getElementById('settings-raw').classList.contains('hidden');
-  let content;
-
-  if (rawView) {
-    content = document.getElementById('raw-props').value;
-  } else {
-    // Collect values from all control types
-    const lines = state.propsRaw.split('\n');
-    const updated = {};
-
-    // Text, number, and hidden inputs
-    document.querySelectorAll('#props-grid input[data-key][type="text"], #props-grid input[data-key][type="number"], #props-grid input[data-key][type="hidden"]').forEach(inp => {
-      updated[inp.dataset.key] = inp.value;
-    });
-    // Select dropdowns
-    document.querySelectorAll('#props-grid select[data-key]').forEach(sel => {
-      updated[sel.dataset.key] = sel.value;
-    });
-
-    content = lines.map(l => {
-      if (l.trim().startsWith('#') || !l.trim()) return l;
-      const i = l.indexOf('=');
-      if (i < 0) return l;
-      const k = l.slice(0, i).trim();
-      return updated[k] !== undefined ? `${k}=${updated[k]}` : l;
-    }).join('\n');
-  }
-
   try {
-    await api('PUT', `/api/containers/${state.currentContainer.Id}/file`, {
-      path: '/data/server.properties', content,
-    });
-    state.propsRaw = content;
-    toast('Settings saved!', 'success');
+    await saveSettings();
+    toast('Settings saved! Restart server for changes to take effect.', 'info');
   } catch (e) {
     toast(e.message, 'error');
   } finally {
     btn.disabled = false; btn.textContent = 'Save';
+  }
+});
+
+document.getElementById('save-restart-settings').addEventListener('click', async () => {
+  const btn = document.getElementById('save-restart-settings');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await saveSettings();
+    toast('Settings saved! Restarting server…', 'success');
+    btn.textContent = 'Restarting…';
+    await api('POST', `/api/containers/${state.currentContainer.Id}/action`, { action: 'restart' });
+    toast('Server restarting — settings will take effect.', 'success');
+    setTimeout(() => openContainer(state.currentContainer.Id), 3000);
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Save & Restart';
   }
 });
 
@@ -1744,6 +1820,38 @@ function renderAllPlayers() {
       if (p.banned) badges += '<span class="pc-badge ban">Banned</span>';
     }
 
+    // Action buttons
+    let actions = '<div class="pc-actions" style="display:flex;gap:4px;flex-shrink:0;flex-wrap:wrap">';
+    if (isBedrock) {
+      if (p.allowlisted) {
+        actions += `<button class="pc-act-btn remove" data-cmd="allowlist remove ${name}" title="Remove from allowlist">✕ Allow</button>`;
+      } else {
+        actions += `<button class="pc-act-btn add" data-cmd="allowlist add ${name}" title="Add to allowlist">+ Allow</button>`;
+      }
+      if (p.permission === 'operator') {
+        actions += `<button class="pc-act-btn remove" data-cmd="deop ${name}" title="Remove operator">✕ OP</button>`;
+      } else {
+        actions += `<button class="pc-act-btn add" data-cmd="op ${name}" title="Make operator">+ OP</button>`;
+      }
+    } else {
+      if (p.whitelisted) {
+        actions += `<button class="pc-act-btn remove" data-cmd="whitelist remove ${name}" title="Remove from whitelist">✕ WL</button>`;
+      } else {
+        actions += `<button class="pc-act-btn add" data-cmd="whitelist add ${name}" title="Add to whitelist">+ WL</button>`;
+      }
+      if (p.op) {
+        actions += `<button class="pc-act-btn remove" data-cmd="deop ${name}" title="Remove operator">✕ OP</button>`;
+      } else {
+        actions += `<button class="pc-act-btn add" data-cmd="op ${name}" title="Make operator">+ OP</button>`;
+      }
+      if (p.banned) {
+        actions += `<button class="pc-act-btn add" data-cmd="pardon ${name}" title="Unban player">Pardon</button>`;
+      } else {
+        actions += `<button class="pc-act-btn ban" data-cmd="ban ${name}" title="Ban player">Ban</button>`;
+      }
+    }
+    actions += '</div>';
+
     const hasDetail = !isBedrock && p.hasData;
     const avatarSrc = p.uuid ? `https://mc-heads.net/avatar/${name}/40` : '';
 
@@ -1753,6 +1861,7 @@ function renderAllPlayers() {
         <div class="pc-name">${name} <span class="pc-badges">${badges}</span></div>
         ${idStr ? `<div class="pc-uuid">${idStr}</div>` : ''}
       </div>
+      ${actions}
       ${hasDetail ? '<span class="pc-arrow">›</span>' : ''}
     </div>`;
 
@@ -1763,9 +1872,11 @@ function renderAllPlayers() {
   html += '</div>';
   container.innerHTML = html;
 
-  // Wire click handlers
+  // Wire click handlers for expanding player details
   container.querySelectorAll('.player-card').forEach(card => {
-    card.addEventListener('click', () => {
+    card.addEventListener('click', (e) => {
+      // Don't toggle if an action button was clicked
+      if (e.target.closest('.pc-act-btn')) return;
       const pid = card.dataset.pid;
       const player = state.allPlayers.find(p => (p.uuid || p.xuid || p.name) === pid);
       if (!player) return;
@@ -1781,6 +1892,27 @@ function renderAllPlayers() {
 
       if (state.selectedPlayerUuid === pid) {
         loadPlayerDetail(pid);
+      }
+    });
+  });
+
+  // Wire action button handlers
+  container.querySelectorAll('.pc-act-btn').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const cmd = btn.dataset.cmd;
+      btn.disabled = true;
+      const origText = btn.textContent;
+      btn.textContent = '…';
+      try {
+        const res = await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: cmd });
+        toast(res.response || `Command sent: ${cmd}`, 'success');
+        // Refresh player list after a short delay to let the server process
+        setTimeout(() => loadPlayers(), 800);
+      } catch (err) {
+        toast(err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = origText;
       }
     });
   });
@@ -1933,7 +2065,18 @@ function renderArmorSlots(armor) {
   }).join('');
 }
 
-// Modal handler (kept for compatibility)
+// Add Player button opens modal
+document.getElementById('add-player-btn').addEventListener('click', () => {
+  const isBedrock = state.serverType === 'bedrock';
+  document.getElementById('modal-title').textContent = isBedrock ? 'Add to Allowlist' : 'Add to Whitelist';
+  document.getElementById('modal-label').textContent = 'Player Name';
+  document.getElementById('modal-input').value = '';
+  document.getElementById('modal-input').placeholder = 'PlayerName';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('modal-input').focus();
+});
+
+// Modal handler
 document.getElementById('modal-cancel').addEventListener('click', () => {
   document.getElementById('modal-overlay').classList.add('hidden');
 });
@@ -1947,20 +2090,12 @@ async function confirmAddPlayer() {
   document.getElementById('modal-overlay').classList.add('hidden');
 
   const isBedrock = state.serverType === 'bedrock';
-  const file = isBedrock ? 'allowlist.json' : 'whitelist.json';
-  const entry = isBedrock ? { name: val } : { uuid: '', name: val };
+  const cmd = isBedrock ? `allowlist add ${val}` : `whitelist add ${val}`;
 
   try {
-    // Read current, append, write back
-    let list = [];
-    try {
-      const res = await api('GET', `/api/containers/${state.currentContainer.Id}/file?path=/data/${file}`);
-      list = JSON.parse(res.content);
-    } catch {}
-    list.push(entry);
-    await api('PUT', `/api/containers/${state.currentContainer.Id}/players`, { file, data: list });
-    toast('Player added!', 'success');
-    loadPlayers(); // Refresh
+    const res = await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: cmd });
+    toast(res.response || `Added ${val}!`, 'success');
+    setTimeout(() => loadPlayers(), 800);
   } catch (e) { toast(e.message, 'error'); }
 }
 
