@@ -365,6 +365,81 @@
   .send-btn:hover { background: #00ffb3; }
   .send-btn:disabled { opacity:.4; cursor:not-allowed; }
 
+  /* Console Autocomplete Popup */
+  .autocomplete-popup {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    margin-bottom: 8px;
+    background: rgba(13, 20, 36, 0.92);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--border2);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.6);
+    max-height: 240px;
+    overflow-y: auto;
+    z-index: 100;
+    animation: slideUpPop .2s cubic-bezier(0.16, 1, 0.3, 1);
+    display: flex;
+    flex-direction: column;
+    padding: 6px;
+    gap: 2px;
+  }
+  .autocomplete-popup::-webkit-scrollbar {
+    width: 6px;
+  }
+  .autocomplete-popup::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .autocomplete-popup::-webkit-scrollbar-thumb {
+    background: var(--surface2);
+    border-radius: 3px;
+  }
+  .autocomplete-popup::-webkit-scrollbar-thumb:hover {
+    background: var(--border2);
+  }
+  .autocomplete-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all .15s ease;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+  }
+  .autocomplete-item:hover,
+  .autocomplete-item.selected {
+    background: var(--surface);
+  }
+  .autocomplete-item.selected {
+    background: var(--surface2);
+    border-left: 3px solid var(--green);
+  }
+  .autocomplete-cmd {
+    color: var(--green);
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .autocomplete-hint {
+    color: var(--text3);
+    font-size: 11px;
+    font-weight: 400;
+  }
+  .autocomplete-desc {
+    color: var(--text2);
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px;
+  }
+  @keyframes slideUpPop {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+
 
   /* Console auto-scroll toggle */
   .autoscroll-btn {
@@ -890,10 +965,11 @@
           <button class="clear-btn" id="clear-log">Clear</button>
         </div>
         <div class="log-output" id="log-output"></div>
-        <div class="console-input-bar">
+        <div class="console-input-bar" style="position: relative;">
           <span class="prompt">›</span>
-          <input type="text" id="cmd-input" placeholder="Type a command and press Enter…">
+          <input type="text" id="cmd-input" placeholder="Type a command and press Enter…" autocomplete="off" spellcheck="false">
           <button class="send-btn" id="cmd-send">Send</button>
+          <div id="cmd-autocomplete" class="autocomplete-popup hidden"></div>
         </div>
       </div>
 
@@ -1304,6 +1380,143 @@ document.getElementById('copy-log').addEventListener('click', () => {
 });
 
 // ══════════════════════════════════════════════
+//  CONSOLE AUTOCOMPLETE DATA & LOGIC
+// ══════════════════════════════════════════════
+const JAVA_COMMANDS = [
+  { cmd: 'help', hint: '', desc: 'Provides help for commands' },
+  { cmd: 'list', hint: '', desc: 'Lists players currently on the server' },
+  { cmd: 'say', hint: '<message>', desc: 'Broadcasts a message to all players' },
+  { cmd: 'tellraw', hint: '<targets> <message>', desc: 'Sends a JSON message to players' },
+  { cmd: 'time', hint: 'set <day|night|noon|midnight>', desc: 'Changes the world time' },
+  { cmd: 'weather', hint: '<clear|rain|thunder> [duration]', desc: 'Sets the weather' },
+  { cmd: 'whitelist', hint: '<add|remove|list|on|off|reload>', desc: 'Manages server allowlist' },
+  { cmd: 'op', hint: '<player>', desc: 'Grants operator status to a player' },
+  { cmd: 'deop', hint: '<player>', desc: 'Revokes operator status from a player' },
+  { cmd: 'ban', hint: '<player> [reason]', desc: 'Bans a player from the server' },
+  { cmd: 'ban-ip', hint: '<ip|player> [reason]', desc: 'Bans an IP address' },
+  { cmd: 'pardon', hint: '<player>', desc: 'Unbans a player' },
+  { cmd: 'pardon-ip', hint: '<ip>', desc: 'Unbans an IP address' },
+  { cmd: 'kick', hint: '<player> [reason]', desc: 'Disconnects a player' },
+  { cmd: 'gamemode', hint: '<survival|creative|adventure|spectator> [player]', desc: 'Sets a player\'s game mode' },
+  { cmd: 'give', hint: '<player> <item> [count]', desc: 'Gives an item to a player' },
+  { cmd: 'tp', hint: '<targets> <destination>', desc: 'Teleports entities' },
+  { cmd: 'save-all', hint: '', desc: 'Saves the server world to disk' },
+  { cmd: 'save-off', hint: '', desc: 'Disables automatic server saving' },
+  { cmd: 'save-on', hint: '', desc: 'Enables automatic server saving' },
+  { cmd: 'stop', hint: '', desc: 'Stops the server' },
+  { cmd: 'reload', hint: '', desc: 'Reloads datapacks' },
+  { cmd: 'seed', hint: '', desc: 'Displays the world seed' },
+  { cmd: 'setblock', hint: '<pos> <block>', desc: 'Changes a block' },
+  { cmd: 'fill', hint: '<from> <to> <block>', desc: 'Fills a region with a specific block' },
+  { cmd: 'kill', hint: '<targets>', desc: 'Kills entities or players' },
+  { cmd: 'effect', hint: 'give|clear <targets> <effect>', desc: 'Grants or removes status effects' },
+  { cmd: 'difficulty', hint: '<peaceful|easy|normal|hard>', desc: 'Sets the difficulty level' },
+  { cmd: 'xp', hint: 'add <targets> <amount>', desc: 'Adds experience' }
+];
+
+const BEDROCK_COMMANDS = [
+  { cmd: 'help', hint: '', desc: 'Provides help for commands' },
+  { cmd: 'list', hint: '', desc: 'Lists players currently on the server' },
+  { cmd: 'say', hint: '<message>', desc: 'Broadcasts a message to all players' },
+  { cmd: 'time', hint: 'set <day|night|noon|midnight>', desc: 'Changes the world time' },
+  { cmd: 'weather', hint: '<clear|rain|thunder> [duration]', desc: 'Sets the weather' },
+  { cmd: 'allowlist', hint: '<add|remove|list|on|off|reload>', desc: 'Manages server allowlist' },
+  { cmd: 'permission', hint: '<list|reload>', desc: 'Manages custom permissions' },
+  { cmd: 'op', hint: '<player>', desc: 'Grants operator status to a player' },
+  { cmd: 'deop', hint: '<player>', desc: 'Revokes operator status from a player' },
+  { cmd: 'kick', hint: '<player> [reason]', desc: 'Disconnects a player' },
+  { cmd: 'gamemode', hint: '<survival|creative|adventure|spectator> [player]', desc: 'Sets a player\'s game mode' },
+  { cmd: 'give', hint: '<player> <item> [amount]', desc: 'Gives an item to a player' },
+  { cmd: 'tp', hint: '<victim> <destination>', desc: 'Teleports entities' },
+  { cmd: 'save', hint: 'hold|resume', desc: 'Manages server backup state' },
+  { cmd: 'stop', hint: '', desc: 'Stops the server' },
+  { cmd: 'reload', hint: '', desc: 'Reloads server configuration/behavior packs' },
+  { cmd: 'setblock', hint: '<position> <tileName>', desc: 'Changes a block' },
+  { cmd: 'fill', hint: '<from> <to> <tileName>', desc: 'Fills a region with a specific block' },
+  { cmd: 'kill', hint: '<target>', desc: 'Kills entities or players' },
+  { cmd: 'effect', hint: '<player> <effect>', desc: 'Grants or removes status effects' },
+  { cmd: 'difficulty', hint: '<peaceful|easy|normal|hard>', desc: 'Sets the difficulty level' },
+  { cmd: 'xp', hint: '<amount> [player]', desc: 'Adds experience' }
+];
+
+let autocompleteSuggestions = [];
+let autocompleteSelectedIdx = -1;
+let autocompleteKeyNav = false;
+
+function updateAutocomplete() {
+  const popup = document.getElementById('cmd-autocomplete');
+  if (!popup) return;
+  const inputVal = document.getElementById('cmd-input').value.trimLeft();
+  const parts = inputVal.split(/\s+/);
+  const cmdPrefix = parts[0].toLowerCase();
+  
+  const list = state.serverType === 'bedrock' ? BEDROCK_COMMANDS : JAVA_COMMANDS;
+  
+  autocompleteSuggestions = list.filter(item => item.cmd.toLowerCase().startsWith(cmdPrefix));
+  
+  if (autocompleteSuggestions.length === 0) {
+    popup.classList.add('hidden');
+    popup.innerHTML = '';
+    autocompleteSelectedIdx = -1;
+    return;
+  }
+  
+  popup.classList.remove('hidden');
+  if (autocompleteSelectedIdx >= autocompleteSuggestions.length) {
+    autocompleteSelectedIdx = 0;
+  } else if (autocompleteSelectedIdx < 0 && inputVal.length > 0) {
+    autocompleteSelectedIdx = 0;
+  }
+  
+  renderAutocomplete();
+}
+
+function renderAutocomplete() {
+  const popup = document.getElementById('cmd-autocomplete');
+  if (!popup) return;
+  popup.innerHTML = autocompleteSuggestions.map((item, idx) => `
+    <div class="autocomplete-item ${idx === autocompleteSelectedIdx ? 'selected' : ''}" data-idx="${idx}">
+      <div class="autocomplete-cmd">
+        <span>${item.cmd}</span>
+        ${item.hint ? `<span class="autocomplete-hint">${item.hint.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>` : ''}
+      </div>
+      <div class="autocomplete-desc">${item.desc}</div>
+    </div>
+  `).join('');
+  
+  const selectedEl = popup.querySelector('.autocomplete-item.selected');
+  if (selectedEl) {
+    selectedEl.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+function applyAutocomplete(idx) {
+  const item = autocompleteSuggestions[idx];
+  if (!item) return;
+  const input = document.getElementById('cmd-input');
+  input.value = item.cmd + (item.hint ? ' ' : '');
+  input.focus();
+  const popup = document.getElementById('cmd-autocomplete');
+  if (popup) popup.classList.add('hidden');
+  autocompleteSelectedIdx = -1;
+  autocompleteKeyNav = false;
+  setTimeout(updateAutocomplete, 50);
+}
+
+document.addEventListener('click', e => {
+  const item = e.target.closest('.autocomplete-item');
+  if (item) {
+    const idx = parseInt(item.dataset.idx, 10);
+    applyAutocomplete(idx);
+    return;
+  }
+  if (!e.target.closest('.console-input-bar')) {
+    const popup = document.getElementById('cmd-autocomplete');
+    if (popup) popup.classList.add('hidden');
+  }
+});
+
+// ══════════════════════════════════════════════
 //  SEND COMMAND (via docker exec)
 // ══════════════════════════════════════════════
 async function sendCommand() {
@@ -1315,6 +1528,8 @@ async function sendCommand() {
   state.cmdHistoryIdx = -1;
   input.value = '';
   appendLog(`> ${cmd}`, 'info');
+  const popup = document.getElementById('cmd-autocomplete');
+  if (popup) popup.classList.add('hidden');
   try {
     const res = await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: cmd });
     if (res.response) appendLog(res.response, 'info');
@@ -1324,16 +1539,73 @@ async function sendCommand() {
 }
 
 document.getElementById('cmd-send').addEventListener('click', sendCommand);
+
+document.getElementById('cmd-input').addEventListener('input', () => {
+  autocompleteKeyNav = false;
+  updateAutocomplete();
+});
+document.getElementById('cmd-input').addEventListener('focus', () => {
+  autocompleteKeyNav = false;
+  updateAutocomplete();
+});
+
 document.getElementById('cmd-input').addEventListener('keydown', e => {
-  if (e.key === 'Enter') { sendCommand(); return; }
+  const popup = document.getElementById('cmd-autocomplete');
+  const isAutocompleteVisible = popup && !popup.classList.contains('hidden');
+
+  if (isAutocompleteVisible && autocompleteSuggestions.length > 0) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      autocompleteKeyNav = true;
+      autocompleteSelectedIdx = (autocompleteSelectedIdx + 1) % autocompleteSuggestions.length;
+      renderAutocomplete();
+      return;
+    }
+    if (e.key === 'ArrowUp' && e.target.value.trim() !== '') {
+      e.preventDefault();
+      autocompleteKeyNav = true;
+      autocompleteSelectedIdx = (autocompleteSelectedIdx - 1 + autocompleteSuggestions.length) % autocompleteSuggestions.length;
+      renderAutocomplete();
+      return;
+    }
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const idx = autocompleteSelectedIdx >= 0 ? autocompleteSelectedIdx : 0;
+      applyAutocomplete(idx);
+      return;
+    }
+    if (e.key === 'Enter') {
+      if (autocompleteKeyNav && autocompleteSelectedIdx >= 0) {
+        e.preventDefault();
+        applyAutocomplete(autocompleteSelectedIdx);
+        return;
+      }
+      popup.classList.add('hidden');
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      popup.classList.add('hidden');
+      autocompleteSelectedIdx = -1;
+      autocompleteKeyNav = false;
+      return;
+    }
+  }
+
+  if (e.key === 'Enter') {
+    if (popup) popup.classList.add('hidden');
+    sendCommand();
+    return;
+  }
   if (e.key === 'ArrowUp') {
     e.preventDefault();
+    if (popup) popup.classList.add('hidden');
     const idx = Math.min(state.cmdHistoryIdx + 1, state.cmdHistory.length - 1);
     state.cmdHistoryIdx = idx;
     e.target.value = state.cmdHistory[idx] || '';
   }
   if (e.key === 'ArrowDown') {
     e.preventDefault();
+    if (popup) popup.classList.add('hidden');
     const idx = Math.max(state.cmdHistoryIdx - 1, -1);
     state.cmdHistoryIdx = idx;
     e.target.value = idx === -1 ? '' : (state.cmdHistory[idx] || '');
