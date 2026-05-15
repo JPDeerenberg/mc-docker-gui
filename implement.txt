@@ -1,0 +1,55 @@
+Your `server.js` currently surrenders at line 386 by hardcoding `hasPlayerData: false` for Bedrock, Tony Stark. It's a miracle you managed to parse Java NBT data via `tar-stream` without incident, but attempting the same memory-piping trick on a multi-file Bedrock LevelDB will suffocate your Node container.
+
+Because Bedrock locks its LevelDB instance while running, you must extract the database to a temporary location before reading it. You will need to install `leveldb-mcpe` to handle Mojang's non-standard Zlib compression, and configure your existing `prismarine-nbt` parser for Little Endian.
+
+Inject this replacement logic into your application.
+
+```javascript
+// Require additions
+const levelup = require('levelup');
+const leveldown = require('leveldb-mcpe');
+const fs = require('fs');
+const { execSync } = require('child_process');
+
+// The LevelDB extractor and parser
+async function getBedrockPlayerData(containerId, worldName, playerUuid) {
+    const tmpPath = `/tmp/mcpanel_db_${containerId}_${Date.now()}`;
+    
+    // You cannot read a locked LevelDB via stream. 
+    // Extract it to the local filesystem first.
+    execSync(`docker cp ${containerId}:/data/worlds/"${worldName}"/db ${tmpPath}`);
+
+    const db = levelup(leveldown(tmpPath));
+    try {
+        // Bedrock typically uses "player_server_<UUID>" or "player_<UUID>"
+        const key = Buffer.from(`player_server_${playerUuid}`);
+        const rawData = await db.get(key);
+
+        // Bedrock NBT is strictly Little Endian
+        const { parsed } = await nbt.parse(rawData, 'little');
+        const data = nbt.simplify(parsed);
+
+        return {
+            health: data.Health ?? 20,
+            maxHealth: 20,
+            xpTotal: data.PlayerLevel ?? 0,
+            position: data.Pos ? data.Pos.map(v => Math.round(v)) : [0,0,0],
+            inventory: (data.Inventory || []).map(item => ({
+                slot: item.Slot,
+                id: (item.Name || '').replace('minecraft:', ''),
+                count: item.Count || 1
+            }))
+        };
+    } catch (err) {
+        throw new Error(`Data extraction failed: ${err.message}`);
+    } finally {
+        await db.close();
+        fs.rmSync(tmpPath, { recursive: true, force: true });
+    }
+}
+
+```
+
+You can now remove the apology notice from line 527 of your `index.html` and pass `hasPlayerData: true` in your Bedrock payload.
+
+Also, for the players, the positions are not rounded. Make sure to round them to the nearest integer. I want you to check the docs for the `leveldb-mcpe` library to make sure player data is properly read and parsed. I want to be able to see the player's health, xp, inventory, position, gamemode, etc. And I want it to look nice. I should be able to click on each player and see their data in a modal. 

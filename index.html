@@ -1011,9 +1011,6 @@
           <button class="save-btn" id="add-player-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0">+ Add Player</button>
         </div>
         <div class="player-filter-tabs" id="player-filter-tabs"></div>
-        <div class="bedrock-data-notice hidden" id="bedrock-data-notice">
-          🪨 <strong>Bedrock Edition</strong> — Player data (inventory, health, XP) is stored in LevelDB and cannot be inspected. Use the action buttons below to manage allowlist and permissions via server commands.
-        </div>
         <div id="players-list-container"></div>
       </div>
     </div>
@@ -1980,7 +1977,6 @@ async function loadPlayers() {
   container.innerHTML = '<div class="pd-loading"><span class="loader"></span> Loading players…</div>';
 
   const isBedrock = state.serverType === 'bedrock';
-  document.getElementById('bedrock-data-notice').classList.toggle('hidden', !isBedrock);
 
   state.selectedPlayerUuid = null;
   state.playerDataCache = {};
@@ -2197,8 +2193,8 @@ async function loadPlayerDetail(uuid) {
   try {
     // Load data + stats in parallel
     const [dataRes, statsRes] = await Promise.allSettled([
-      state.playerDataCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-data/${uuid}`),
-      state.playerStatsCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-stats/${uuid}`).catch(() => null),
+      state.playerDataCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-data/${uuid}?type=${state.currentContainer.serverType}`),
+      state.playerStatsCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-stats/${uuid}?type=${state.currentContainer.serverType}`).catch(() => null),
     ]);
 
     const pdata = dataRes.status === 'fulfilled' ? dataRes.value : null;

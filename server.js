@@ -10,7 +10,10 @@ const path = require('path');
 const tar = require('tar-stream');
 const { PassThrough } = require('stream');
 const nbt = require('prismarine-nbt');
-
+const levelup = require('levelup');
+const leveldown = require('leveldb-mcpe');
+const fs = require('fs');
+const { execSync } = require('child_process');
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const PORT        = process.env.PORT || 3000;
@@ -324,7 +327,8 @@ app.get('/api/containers/:id/all-players', auth, async (req, res) => {
 
       res.json({
         players: Object.values(playerMap),
-        hasPlayerData: false,
+        hasPlayerData: true,
+        worldFolder: 'Bedrock level',
       });
     } else {
       // Java: merge usercache + whitelist + ops + bans + playerdata folder
@@ -442,12 +446,72 @@ app.get('/api/containers/:id/all-players', auth, async (req, res) => {
   }
 });
 
-// Player NBT data (Java only)
+// ─── Bedrock LevelDB Extractor ───────────────────────────────────────────────
+
+async function getBedrockPlayerData(containerId, worldName, playerUuid) {
+  const tmpPath = `/tmp/mcpanel_db_${containerId}_${Date.now()}`;
+  
+  // Extract to local filesystem
+  execSync(`docker cp ${containerId}:/data/worlds/"${worldName}"/db ${tmpPath}`);
+
+  const db = levelup(leveldown(tmpPath));
+  try {
+    const key = Buffer.from(`player_server_${playerUuid}`);
+    const rawData = await db.get(key);
+
+    const { parsed } = await nbt.parse(rawData, 'little');
+    const data = nbt.simplify(parsed);
+
+    const GAMEMODES = ['Survival', 'Creative', 'Adventure', 'Survival Spectator', 'Creative Spectator', 'Fallback', 'Spectator'];
+    const DIMENSIONS = { 0: 'Overworld', 1: 'Nether', 2: 'The End' };
+
+    return {
+      health: data.Health ?? 20,
+      maxHealth: 20,
+      foodLevel: 20,
+      foodSaturation: 5,
+      xpLevel: data.PlayerLevel ?? 0,
+      xpTotal: 0,
+      score: 0,
+      gamemode: GAMEMODES[data.PlayerGameMode] || `Unknown (${data.PlayerGameMode})`,
+      dimension: DIMENSIONS[data.DimensionId] || `Unknown (${data.DimensionId})`,
+      position: data.Pos ? data.Pos.map(v => Math.round(v)) : [0,0,0],
+      inventory: (data.Inventory || []).map(item => ({
+        slot: item.Slot,
+        id: (item.Name || '').replace('minecraft:', ''),
+        count: item.Count || 1,
+        damage: item.Damage || 0
+      })),
+      enderChest: [],
+      armor: (data.Armor || []).map((item, i) => ({
+        slot: 100 + i,
+        id: (item.Name || '').replace('minecraft:', ''),
+        count: item.Count || 1,
+        damage: item.Damage || 0
+      })),
+      selectedSlot: 0
+    };
+  } catch (err) {
+    throw new Error(`Data extraction failed: ${err.message}`);
+  } finally {
+    await db.close();
+    fs.rmSync(tmpPath, { recursive: true, force: true });
+  }
+}
+
+// Player NBT data (Java + Bedrock)
 app.get('/api/containers/:id/player-data/:uuid', auth, async (req, res) => {
   try {
     const id = req.params.id;
     const uuid = req.params.uuid;
+    const { type = 'java' } = req.query;
     const world = await getWorldFolder(id);
+
+    if (type === 'bedrock') {
+      const data = await getBedrockPlayerData(id, world, uuid);
+      return res.json(data);
+    }
+
     const datPath = `/data/${world}/playerdata/${uuid}.dat`;
 
     const buf = await readContainerFileBuffer(id, datPath);
