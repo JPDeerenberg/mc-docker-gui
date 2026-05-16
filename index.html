@@ -167,12 +167,14 @@
   .topnav .breadcrumb .sep { color: var(--text3); }
   .topnav .breadcrumb .current { color: var(--text); font-weight: 500; }
   .topnav .spacer { flex: 1; }
-  .topnav .logout-btn {
-    padding: 6px 14px; background: transparent;
-    border: 1px solid var(--border2); color: var(--text2);
-    font-size: 12px; border-radius: 8px;
-  }
   .topnav .logout-btn:hover { border-color: var(--red); color: var(--red); }
+
+  .top-link-btn {
+    padding: 6px 12px; font-size: 14px; font-weight: 500;
+    background: transparent; color: var(--text2); border-radius: 8px;
+  }
+  .top-link-btn:hover { color: var(--text); background: var(--surface); }
+  .top-link-btn.active { background: rgba(0,229,160,.12); color: var(--green); }
 
   .main-content { flex: 1; padding: 28px 24px; max-width: 1280px; width: 100%; margin: 0 auto; }
 
@@ -265,6 +267,42 @@
   .empty-state .emoji { font-size: 40px; margin-bottom: 12px; }
   .empty-state h3 { font-size: 16px; color: var(--text); margin-bottom: 6px; }
   .empty-state p { font-size: 13px; color: var(--text2); max-width: 320px; margin: 0 auto; }
+
+  /* ══════════════════════════════════════════════
+     STATS
+  ══════════════════════════════════════════════ */
+  .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; margin-bottom: 32px; }
+  .stat-hero-card {
+    background: var(--bg2); border: 1px solid var(--border);
+    border-radius: var(--radius-lg); padding: 24px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; box-shadow: 0 12px 30px rgba(0,0,0,.3);
+  }
+  .stat-hero-card::before {
+    content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+    background: radial-gradient(circle, rgba(0,229,160,.05) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  .stat-hero-val { font-size: 36px; font-weight: 700; color: var(--text); font-family: 'JetBrains Mono', monospace; margin: 12px 0 4px; }
+  .stat-hero-label { font-size: 13px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .05em; }
+  .stat-hero-sub { font-size: 11px; color: var(--text3); }
+  
+  .prog-bar-bg { width: 100%; height: 6px; background: var(--bg3); border-radius: 99px; margin-top: 16px; overflow: hidden; }
+  .prog-bar-fill { height: 100%; background: var(--green); border-radius: 99px; transition: width .5s cubic-bezier(0.4, 0, 0.2, 1); }
+  .prog-bar-fill.warn { background: var(--amber); }
+  .prog-bar-fill.crit { background: var(--red); }
+
+  .srv-stats-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+  .srv-stat-card {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: var(--radius); padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .srv-stat-header { display: flex; align-items: center; justify-content: space-between; }
+  .srv-stat-name { font-weight: 600; font-size: 14px; color: var(--text); }
+  .srv-stat-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; }
+  .srv-stat-lbl { color: var(--text2); }
+  .srv-stat-val { color: var(--text); font-family: 'JetBrains Mono', monospace; font-weight: 500; }
 
   /* ══════════════════════════════════════════════
      CONTAINER DETAIL
@@ -901,7 +939,11 @@
 <div id="view-app" class="hidden">
   <nav class="topnav">
     <div class="logo" id="nav-home">⛏ MC<span class="dot">Panel</span></div>
-    <div class="breadcrumb hidden" id="nav-breadcrumb">
+    <div class="top-links" style="display: flex; gap: 10px; margin-left: 24px;">
+      <button class="top-link-btn active" data-page="dashboard">Servers</button>
+      <button class="top-link-btn" data-page="stats">Stats</button>
+    </div>
+    <div class="breadcrumb hidden" id="nav-breadcrumb" style="margin-left: 16px;">
       <span class="sep">›</span>
       <span class="current" id="nav-bc-name"></span>
     </div>
@@ -927,6 +969,32 @@
       <button class="pill bedrock" data-filter="bedrock">🪨 Bedrock</button>
     </div>
     <div class="containers-grid" id="containers-grid"></div>
+  </div>
+
+  <!-- Stats page -->
+  <div class="main-content hidden" id="page-stats">
+    <div class="section-header">
+      <div>
+        <h2>System Stats</h2>
+        <p>Real-time host and container utilization</p>
+      </div>
+      <button class="refresh-btn" id="stats-refresh-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <!-- Host stats -->
+    <h3 style="font-size:15px; color:var(--text); margin-bottom:16px;">Host System</h3>
+    <div class="stats-grid" id="stats-host-grid">
+      <!-- Injected by JS -->
+    </div>
+
+    <!-- Minecraft servers stats -->
+    <h3 style="font-size:15px; color:var(--text); margin-bottom:16px;">Minecraft Servers</h3>
+    <div class="srv-stats-grid" id="stats-srv-grid">
+      <!-- Injected by JS -->
+    </div>
   </div>
 
   <!-- Container detail page -->
@@ -1097,13 +1165,36 @@ function showView(name) {
     document.getElementById(id).classList.toggle('hidden', id !== `view-${name === 'login' ? 'login' : 'app'}`);
   });
   if (name !== 'login') {
-    ['page-dashboard', 'page-container'].forEach(id => {
+    ['page-dashboard', 'page-container', 'page-stats'].forEach(id => {
       document.getElementById(id).classList.toggle('hidden', id !== `page-${name}`);
     });
     const bc = document.getElementById('nav-breadcrumb');
     bc.classList.toggle('hidden', name !== 'container');
+
+    // Update top links
+    document.querySelectorAll('.top-link-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.page === name);
+    });
+
+    if (name === 'stats') {
+      loadStats();
+      if (!window.statsInterval) {
+        window.statsInterval = setInterval(loadStats, 5000);
+      }
+    } else {
+      if (window.statsInterval) {
+        clearInterval(window.statsInterval);
+        window.statsInterval = null;
+      }
+    }
   }
 }
+
+document.querySelectorAll('.top-link-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    showView(btn.dataset.page);
+  });
+});
 
 // ══════════════════════════════════════════════
 //  LOGIN
@@ -1155,6 +1246,93 @@ document.getElementById('back-btn').addEventListener('click', () => {
 
 const refreshBtn = document.getElementById('refresh-btn');
 refreshBtn.addEventListener('click', () => loadContainers());
+
+document.getElementById('stats-refresh-btn').addEventListener('click', loadStats);
+
+function formatBytes(bytes) {
+  if (!bytes || isNaN(bytes) || bytes === 0) return '0 B';
+  const k = 1024, sizes = ['B', 'KB', 'MB', 'GB', 'TB'], i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+async function loadStats() {
+  const btn = document.getElementById('stats-refresh-btn');
+  btn.classList.add('spinning');
+  try {
+    const res = await api('GET', '/api/stats');
+    if (!res) return;
+
+    // Render Host
+    const h = res.host;
+    const cpuPct = (h.cpu.loadAvg[0] / h.cpu.cores) * 100;
+    const cpuFmt = Math.min(100, Math.max(0, cpuPct)).toFixed(1);
+    const ramPct = (h.ram.used / h.ram.total) * 100;
+    const tempFmt = h.temp !== null ? h.temp.toFixed(1) + '°C' : 'N/A';
+
+    document.getElementById('stats-host-grid').innerHTML = `
+      <div class="stat-hero-card">
+        <div class="stat-hero-label">CPU Load</div>
+        <div class="stat-hero-val">${cpuFmt}%</div>
+        <div class="stat-hero-sub">${h.cpu.cores} cores • avg: ${h.cpu.loadAvg[0].toFixed(2)}</div>
+        <div class="prog-bar-bg"><div class="prog-bar-fill ${cpuPct > 85 ? 'crit' : cpuPct > 60 ? 'warn' : ''}" style="width:${Math.min(100, cpuPct)}%"></div></div>
+      </div>
+      <div class="stat-hero-card">
+        <div class="stat-hero-label">Memory</div>
+        <div class="stat-hero-val">${ramPct.toFixed(1)}%</div>
+        <div class="stat-hero-sub">${formatBytes(h.ram.used)} / ${formatBytes(h.ram.total)}</div>
+        <div class="prog-bar-bg"><div class="prog-bar-fill ${ramPct > 85 ? 'crit' : ramPct > 60 ? 'warn' : ''}" style="width:${Math.min(100, ramPct)}%"></div></div>
+      </div>
+      <div class="stat-hero-card">
+        <div class="stat-hero-label">Temperature</div>
+        <div class="stat-hero-val">${tempFmt}</div>
+        <div class="stat-hero-sub">Thermal Zone 0</div>
+      </div>
+    `;
+
+    // Render Containers
+    let html = '';
+    for (const c of res.containers) {
+      const isRunning = c.state === 'running';
+      const cPct = c.cpuPercent.toFixed(1);
+      const memFmt = formatBytes(c.memUsage);
+      
+      html += `
+        <div class="srv-stat-card">
+          <div class="srv-stat-header">
+            <div class="srv-stat-name">${c.name}</div>
+            <span class="badge ${isRunning ? 'running' : 'stopped'}">${c.state}</span>
+          </div>
+          <div style="margin-top:4px;">
+            <div class="srv-stat-row">
+              <span class="srv-stat-lbl">CPU Usage</span>
+              <span class="srv-stat-val ${c.cpuPercent > 80 ? 'text-warn' : ''}">${isRunning ? cPct + '%' : '-'}</span>
+            </div>
+            <div class="prog-bar-bg" style="margin-top:6px; margin-bottom:8px; height:4px;">
+              <div class="prog-bar-fill" style="width:${isRunning ? Math.min(100, c.cpuPercent) : 0}%"></div>
+            </div>
+            <div class="srv-stat-row">
+              <span class="srv-stat-lbl">RAM Usage</span>
+              <span class="srv-stat-val">${isRunning ? memFmt : '-'}</span>
+            </div>
+            <div class="prog-bar-bg" style="margin-top:6px; height:4px;">
+              <div class="prog-bar-fill" style="width:${isRunning && c.memLimit ? Math.min(100, (c.memUsage / c.memLimit) * 100) : 0}%"></div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    document.getElementById('stats-srv-grid').innerHTML = html || \`<div style="grid-column:1/-1" class="empty-state">No servers found</div>\`;
+
+  } catch (err) {
+    if (err.message.includes('401') || err.message.toLowerCase().includes('unauthorized')) {
+      showView('login');
+    } else {
+      toast('Failed to load stats: ' + err.message, 'error');
+    }
+  } finally {
+    btn.classList.remove('spinning');
+  }
+}
 
 async function loadContainers() {
   const icon = document.getElementById('refresh-icon');
