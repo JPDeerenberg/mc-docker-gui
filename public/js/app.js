@@ -1406,11 +1406,19 @@ function renderInvSlots(items, startSlot, endSlot, selectedSlot) {
 
 function renderSingleSlot(item, isSelected) {
   if (!item) return `<div class="pd-inv-slot${isSelected ? ' selected' : ''}"></div>`;
-  const icon = getItemIcon(item.id);
-  const name = item.id.length > 10 ? item.id.slice(0, 9) + '…' : item.id;
-  return `<div class="pd-inv-slot has-item${isSelected ? ' selected' : ''}" title="${formatItemName(item.id)} x${item.count}">
-    <span class="item-icon">${icon}</span>
-    <span class="item-name">${escHtml(name)}</span>
+  
+  const itemUrl = `https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.1/minecraft/textures/item/${item.id}.png`;
+  const blockUrl = `https://raw.githubusercontent.com/PrismarineJS/minecraft-assets/master/data/1.20.1/minecraft/textures/block/${item.id}.png`;
+  const fallbackIcon = getItemIcon(item.id);
+  const formattedName = formatItemName(item.id);
+
+  return `<div class="pd-inv-slot has-item${isSelected ? ' selected' : ''}" title="${formattedName} x${item.count}">
+    <span class="item-icon">
+      <img src="${itemUrl}" 
+           alt="${escHtml(item.id)}"
+           class="pd-item-img"
+           onerror="if (this.src !== '${blockUrl}') { this.src = '${blockUrl}'; } else { this.replaceWith(document.createTextNode('${fallbackIcon}')); }" />
+    </span>
     ${item.count > 1 ? `<span class="item-count">${item.count}</span>` : ''}
   </div>`;
 }

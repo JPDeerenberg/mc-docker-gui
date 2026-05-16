@@ -759,19 +759,32 @@ input:focus, textarea:focus {
 .pd-inv-slot.has-item { border-color: var(--border2); }
 .pd-inv-slot.selected { border-color: var(--green); box-shadow: 0 0 0 1px var(--green); }
 .pd-inv-slot .item-name {
-  font-size: 9px; color: var(--text2); text-align: center;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 100%; padding: 0 2px;
-  font-family: 'JetBrains Mono', monospace;
+  display: none;
 }
 .pd-inv-slot .item-count {
   position: absolute; bottom: 2px; right: 3px;
   font-size: 9px; font-weight: 700; color: var(--text);
   font-family: 'JetBrains Mono', monospace;
   text-shadow: 0 1px 2px rgba(0,0,0,.8);
+  z-index: 2;
 }
 .pd-inv-slot .item-icon {
-  font-size: 18px; line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+}
+.pd-item-img {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  transition: transform 0.15s ease;
+}
+.pd-inv-slot:hover .pd-item-img {
+  transform: scale(1.1);
 }
 
 .pd-armor-grid {
