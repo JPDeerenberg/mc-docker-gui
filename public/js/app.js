@@ -1201,7 +1201,7 @@ function renderAllPlayers() {
     }
     actions += '</div>';
 
-    const hasDetail = p.hasData;
+    const hasDetail = true;
     const avatarSrc = p.uuid ? `https://mc-heads.net/avatar/${name}/40` : '';
 
     html += `<div class="player-card${isActive ? ' active' : ''}" data-pid="${escHtml(id)}">
@@ -1229,8 +1229,6 @@ function renderAllPlayers() {
       const pid = card.dataset.pid;
       const player = state.allPlayers.find(p => (p.uuid || p.xuid || p.name) === pid);
       if (!player) return;
-      const hasDetail = player.hasData;
-      if (!hasDetail) return;
 
       if (state.selectedPlayerUuid === pid) {
         state.selectedPlayerUuid = null;

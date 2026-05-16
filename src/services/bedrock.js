@@ -269,7 +269,10 @@ async function getBedrockPlayersInternal(containerId, worldName) {
     const playerKeys = allKeys.filter(k =>
       k.startsWith('player_server_') || k.startsWith('player_') || k === '~local_player'
     );
-    console.log(`[bedrock] DB has ${playerKeys.length} player keys`);
+    console.log(`[bedrock] DB has ${allKeys.length} total keys, ${playerKeys.length} player keys`);
+    if (playerKeys.length === 0 && allKeys.length > 0) {
+      console.log(`[bedrock] First 10 keys found in LevelDB:`, allKeys.slice(0, 10));
+    }
 
     const players = [];
     for (const key of playerKeys) {

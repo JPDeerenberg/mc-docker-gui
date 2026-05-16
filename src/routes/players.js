@@ -294,6 +294,23 @@ router.get('/:id/player-data/:uuid', auth, async (req, res) => {
 
     if (type === 'bedrock') {
       try {
+        // Pre-verify if player has ever joined to avoid returning another player's data via fallback
+        let leveldbPlayers = [];
+        try {
+          leveldbPlayers = await getBedrockPlayers(id, world);
+        } catch (err) {
+          console.error(`[player-data] Failed to retrieve Bedrock player list:`, err.message);
+        }
+
+        const hasJoined = leveldbPlayers.some(p => 
+          (p.uuid && p.uuid.toLowerCase() === uuid.toLowerCase()) || 
+          (p.name && p.name.toLowerCase() === uuid.toLowerCase())
+        );
+
+        if (!hasJoined) {
+          return res.status(404).json({ error: 'Player has not joined this server yet', notJoined: true });
+        }
+
         const data = await getBedrockPlayerData(id, world, uuid);
         return res.json(data);
       } catch (bedrockErr) {
@@ -307,7 +324,14 @@ router.get('/:id/player-data/:uuid', auth, async (req, res) => {
 
     const datPath = `/data/${world}/playerdata/${uuid}.dat`;
 
-    const buf = await readContainerFileBuffer(id, datPath);
+    let buf;
+    try {
+      buf = await readContainerFileBuffer(id, datPath);
+    } catch (err) {
+      console.log(`[player-data] Java player data file not found for ${uuid}: ${err.message}`);
+      return res.status(404).json({ error: 'Player has not joined this server yet', notJoined: true });
+    }
+
     const { parsed } = await nbt.parse(buf);
     const data = nbt.simplify(parsed);
 
