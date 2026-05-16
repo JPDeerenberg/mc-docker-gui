@@ -1407,8 +1407,8 @@ function renderInvSlots(items, startSlot, endSlot, selectedSlot) {
 function renderSingleSlot(item, isSelected) {
   if (!item) return `<div class="pd-inv-slot${isSelected ? ' selected' : ''}"></div>`;
   
-  const itemUrl = `https://cdn.jsdelivr.net/gh/PrismarineJS/minecraft-assets@master/data/1.20.2/minecraft/textures/item/${item.id}.png`;
-  const blockUrl = `https://cdn.jsdelivr.net/gh/PrismarineJS/minecraft-assets@master/data/1.20.2/minecraft/textures/block/${item.id}.png`;
+  const itemUrl  = `/mc-textures/items/${item.id}.png`;
+  const blockUrl = `/mc-textures/blocks/${item.id}.png`;
   const fallbackIcon = getItemIcon(item.id);
   const formattedName = formatItemName(item.id);
 
