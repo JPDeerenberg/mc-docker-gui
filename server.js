@@ -309,18 +309,21 @@ app.get('/api/containers/:id/all-players', auth, async (req, res) => {
           xuid: p.xuid || '',
           allowlisted: true,
           permission: 'member',
+          hasData: true,
         };
       }
       for (const p of permissions) {
         const key = p.xuid || p.name || 'unknown';
         if (playerMap[key]) {
           playerMap[key].permission = p.permission || 'member';
+          playerMap[key].hasData = true;
         } else {
           playerMap[key] = {
             name: p.name || p.xuid || 'Unknown',
             xuid: p.xuid || '',
             allowlisted: false,
             permission: p.permission || 'member',
+            hasData: true,
           };
         }
       }
@@ -456,8 +459,30 @@ async function getBedrockPlayerData(containerId, worldName, playerUuid) {
 
   const db = levelup(leveldown(tmpPath));
   try {
-    const key = Buffer.from(`player_server_${playerUuid}`);
-    const rawData = await db.get(key);
+    let rawData = null;
+    try {
+      rawData = await db.get(Buffer.from(`player_server_${playerUuid}`));
+    } catch (err) {}
+
+    if (!rawData) {
+      try {
+        rawData = await db.get(Buffer.from(`player_${playerUuid}`));
+      } catch (err) {}
+    }
+
+    if (!rawData) {
+      // Fallback: search values for the UUID/XUID string
+      for await (const data of db.createReadStream({ gte: 'player', lte: 'player\xff' })) {
+        if (data.value.toString('utf8').includes(playerUuid)) {
+          rawData = data.value;
+          break;
+        }
+      }
+    }
+
+    if (!rawData) {
+      throw new Error(`Data not found for UUID/XUID ${playerUuid}`);
+    }
 
     const { parsed } = await nbt.parse(rawData, 'little');
     const data = nbt.simplify(parsed);
@@ -465,13 +490,19 @@ async function getBedrockPlayerData(containerId, worldName, playerUuid) {
     const GAMEMODES = ['Survival', 'Creative', 'Adventure', 'Survival Spectator', 'Creative Spectator', 'Fallback', 'Spectator'];
     const DIMENSIONS = { 0: 'Overworld', 1: 'Nether', 2: 'The End' };
 
+    const attributes = data.Attributes || [];
+    const getAttr = (name, def) => {
+      const attr = attributes.find(a => a.Name === name);
+      return attr ? attr.Current : def;
+    };
+
     return {
-      health: data.Health ?? 20,
-      maxHealth: 20,
-      foodLevel: 20,
-      foodSaturation: 5,
-      xpLevel: data.PlayerLevel ?? 0,
-      xpTotal: 0,
+      health: getAttr('minecraft:health', 20),
+      maxHealth: getAttr('minecraft:health', 20), // Max is also in attr.Max but this is fine
+      foodLevel: getAttr('minecraft:player.hunger', 20),
+      foodSaturation: getAttr('minecraft:player.saturation', 5),
+      xpLevel: getAttr('minecraft:player.level', 0),
+      xpTotal: data.PlayerLevel ?? 0,
       score: 0,
       gamemode: GAMEMODES[data.PlayerGameMode] || `Unknown (${data.PlayerGameMode})`,
       dimension: DIMENSIONS[data.DimensionId] || `Unknown (${data.DimensionId})`,
@@ -479,10 +510,15 @@ async function getBedrockPlayerData(containerId, worldName, playerUuid) {
       inventory: (data.Inventory || []).map(item => ({
         slot: item.Slot,
         id: (item.Name || '').replace('minecraft:', ''),
-        count: item.Count || 1,
+        count: item.Count || item.count || 1,
         damage: item.Damage || 0
       })),
-      enderChest: [],
+      enderChest: (data.EnderChestInventory || []).map(item => ({
+        slot: item.Slot,
+        id: (item.Name || '').replace('minecraft:', ''),
+        count: item.Count || item.count || 1,
+        damage: item.Damage || 0
+      })),
       armor: (data.Armor || []).map((item, i) => ({
         slot: 100 + i,
         id: (item.Name || '').replace('minecraft:', ''),

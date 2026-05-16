@@ -3,8 +3,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 COPY package.json ./
-COPY leveldb-mcpe-1.0.1.tgz ./
-RUN apk add --no-cache python3 make g++ zlib-dev snappy-dev && npm install --omit=dev
+RUN npm install --omit=dev
 
 COPY server.js ./
 COPY index.html ./
