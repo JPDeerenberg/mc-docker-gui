@@ -131,21 +131,17 @@ async function getBedrockPlayerDataInternal(containerId, worldName, playerIdenti
     const extracted = await extractBedrockDb(containerId, worldName);
     tmpPath = extracted.tmpPath;
     console.log(`[bedrock] DB extracted to ${extracted.dbDir}`);
-    const allFiles = fs.readdirSync(extracted.dbDir);
-    console.log(`[bedrock] DB dir contents (${allFiles.length} items): ${allFiles.join(', ')}`);
 
     mcpeDb.open(extracted.dbDir);
     isOpen = true;
     console.log(`[bedrock] LevelDB opened successfully`);
 
-    // Discover what player keys exist in the database
     const allKeys = mcpeDb.getKeys();
-    const playerKeys = allKeys.filter(k =>
-      k.startsWith('player_server_') || k.startsWith('player_') || k === '~local_player'
-    );
-    console.log(`[bedrock] DB has ${allKeys.length} total keys, ${playerKeys.length} player keys`);
+    const activePlayerKeys = allKeys.filter(k => k.startsWith('player_server_') || k === '~local_player');
+    const mappingKeys = allKeys.filter(k => k.startsWith('player_') && !k.startsWith('player_server_'));
+    console.log(`[bedrock] DB has ${allKeys.length} total keys, ${activePlayerKeys.length} active player keys, ${mappingKeys.length} mapping keys`);
 
-    if (playerKeys.length === 0) {
+    if (activePlayerKeys.length === 0) {
       mcpeDb.close();
       isOpen = false;
       const err = new Error('Player has not joined this server yet');
@@ -153,44 +149,41 @@ async function getBedrockPlayerDataInternal(containerId, worldName, playerIdenti
       throw err;
     }
 
-    // Try to find the right player entry
-    let rawStr = null;
     let matchedKey = null;
 
-    // 1. Try exact key match with the identifier (in case it IS a UUID)
-    for (const key of playerKeys) {
-      if (key === `player_server_${playerIdentifier}` ||
-          key === `player_${playerIdentifier}`) {
-        rawStr = mcpeDb.get(key);
+    // 1. Try exact key match with active keys
+    for (const key of activePlayerKeys) {
+      if (key === playerIdentifier ||
+          key === `player_server_${playerIdentifier}`) {
         matchedKey = key;
         break;
       }
     }
 
-    // 2. Search for the identifier (XUID or name) in the raw NBT bytes
-    if (!rawStr) {
-      for (const key of playerKeys) {
-        const val = mcpeDb.get(key);
-        if (val && val.length > 0 && val.includes(playerIdentifier)) {
-          rawStr = val;
-          matchedKey = key;
-          console.log(`[bedrock] Matched by raw content search in key "${key}"`);
-          break;
+    // 2. Try mapping keys (resolving XUID/MSA ID -> ServerId)
+    if (!matchedKey) {
+      for (const key of mappingKeys) {
+        if (key === `player_${playerIdentifier}` || key.slice('player_'.length) === playerIdentifier) {
+          const val = mcpeDb.get(key);
+          if (val && val.length > 0) {
+            try {
+              const buf = Buffer.isBuffer(val) ? val : Buffer.from(val, 'binary');
+              const { parsed } = await nbt.parse(buf, 'little');
+              const data = nbt.simplify(parsed);
+              if (data.ServerId && activePlayerKeys.includes(data.ServerId)) {
+                matchedKey = data.ServerId;
+                console.log(`[bedrock] Resolved identifier "${playerIdentifier}" to ServerId "${matchedKey}" via mapping key "${key}"`);
+                break;
+              }
+            } catch (e) {}
+          }
         }
       }
     }
 
-    // 3. If only one player entry exists, use it
-    if (!rawStr && playerKeys.length === 1) {
-      const key = playerKeys[0];
-      rawStr = mcpeDb.get(key);
-      matchedKey = key;
-      console.log(`[bedrock] Using only available player key "${key}"`);
-    }
-
-    // 4. Try parsing each entry's NBT and check NameTag
-    if (!rawStr) {
-      for (const key of playerKeys) {
+    // 3. Search active keys for NameTag match
+    if (!matchedKey) {
+      for (const key of activePlayerKeys) {
         const val = mcpeDb.get(key);
         if (!val || val.length === 0) continue;
         try {
@@ -199,36 +192,40 @@ async function getBedrockPlayerDataInternal(containerId, worldName, playerIdenti
           const d = nbt.simplify(parsed);
           const nameTag = d.NameTag || '';
           if (nameTag.toLowerCase() === playerIdentifier.toLowerCase()) {
-            rawStr = val;
             matchedKey = key;
             console.log(`[bedrock] Matched by NameTag "${nameTag}" in key "${key}"`);
             break;
           }
-        } catch (e) { /* skip unparseable */ }
+        } catch (e) {}
       }
     }
 
-    // 5. Last resort: just use the first player_server_ or player_ entry
-    if (!rawStr) {
-      const serverKey = playerKeys.find(k => k.startsWith('player_server_'));
-      const playerKey = playerKeys.find(k => k.startsWith('player_') && !k.startsWith('player_server_'));
-      const localKey = playerKeys.find(k => k === '~local_player');
-      const fallbackKey = serverKey || playerKey || localKey;
-      if (fallbackKey) {
-        rawStr = mcpeDb.get(fallbackKey);
-        matchedKey = fallbackKey;
-        console.log(`[bedrock] Fallback to key "${fallbackKey}"`);
+    // 4. Try matching raw string content of active keys (last resort search)
+    if (!matchedKey) {
+      for (const key of activePlayerKeys) {
+        const val = mcpeDb.get(key);
+        if (val && val.length > 0 && val.includes(playerIdentifier)) {
+          matchedKey = key;
+          console.log(`[bedrock] Matched by raw content search in key "${key}"`);
+          break;
+        }
       }
     }
 
+    // 5. Fallback to the first active player key
+    if (!matchedKey) {
+      matchedKey = activePlayerKeys[0];
+      console.log(`[bedrock] Fallback to key "${matchedKey}"`);
+    }
+
+    const rawStr = mcpeDb.get(matchedKey);
     mcpeDb.close();
     isOpen = false;
 
     if (!rawStr || rawStr.length === 0) {
-      throw new Error(`Player data not found for "${playerIdentifier}" (searched ${playerKeys.length} keys)`);
+      throw new Error(`Player data not found for "${playerIdentifier}"`);
     }
 
-    // mcpeDb.get() returns binary data as a JS Buffer or string — convert to Buffer for NBT parsing
     const rawBuffer = Buffer.isBuffer(rawStr) ? rawStr : Buffer.from(rawStr, 'binary');
     console.log(`[bedrock] Parsing NBT from key "${matchedKey}" (${rawBuffer.length} bytes)`);
 
@@ -266,16 +263,29 @@ async function getBedrockPlayersInternal(containerId, worldName) {
     console.log(`[bedrock] LevelDB opened successfully for listing`);
 
     const allKeys = mcpeDb.getKeys();
-    const playerKeys = allKeys.filter(k =>
-      k.startsWith('player_server_') || k.startsWith('player_') || k === '~local_player'
-    );
-    console.log(`[bedrock] DB has ${allKeys.length} total keys, ${playerKeys.length} player keys`);
-    if (playerKeys.length === 0 && allKeys.length > 0) {
-      console.log(`[bedrock] First 10 keys found in LevelDB:`, allKeys.slice(0, 10));
+    const activePlayerKeys = allKeys.filter(k => k.startsWith('player_server_') || k === '~local_player');
+    const mappingKeys = allKeys.filter(k => k.startsWith('player_') && !k.startsWith('player_server_'));
+    console.log(`[bedrock] DB has ${allKeys.length} total keys, ${activePlayerKeys.length} active player keys, ${mappingKeys.length} mapping keys`);
+
+    const serverToXuidMap = {};
+    for (const key of mappingKeys) {
+      const val = mcpeDb.get(key);
+      if (!val || val.length === 0) continue;
+      try {
+        const buf = Buffer.isBuffer(val) ? val : Buffer.from(val, 'binary');
+        const { parsed } = await nbt.parse(buf, 'little');
+        const data = nbt.simplify(parsed);
+        
+        const serverId = data.ServerId;
+        const xuid = data.PlatformOnlineId;
+        if (serverId && xuid) {
+          serverToXuidMap[serverId] = xuid;
+        }
+      } catch (e) {}
     }
 
     const players = [];
-    for (const key of playerKeys) {
+    for (const key of activePlayerKeys) {
       const val = mcpeDb.get(key);
       if (!val || val.length === 0) continue;
       try {
@@ -286,19 +296,19 @@ async function getBedrockPlayersInternal(containerId, worldName) {
         let uuid = '';
         if (key.startsWith('player_server_')) {
           uuid = key.slice('player_server_'.length);
-        } else if (key.startsWith('player_')) {
-          uuid = key.slice('player_'.length);
         } else {
-          uuid = key; // ~local_player
+          uuid = key;
         }
 
+        const xuid = serverToXuidMap[key] || '';
         players.push({
           uuid,
+          xuid,
           name: data.NameTag || 'Unknown',
           hasData: true
         });
       } catch (e) {
-        console.error(`[bedrock] Failed to parse player key "${key}" during listing:`, e.message);
+        console.error(`[bedrock] Failed to parse active player key "${key}" during listing:`, e.message);
       }
     }
 

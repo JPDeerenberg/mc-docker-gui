@@ -96,10 +96,11 @@ router.get('/:id/all-players', auth, async (req, res) => {
 
       // 1. Populate from LevelDB players (they have data!)
       for (const p of leveldbPlayers) {
-        const key = p.uuid;
+        const key = p.xuid || p.uuid;
         playerMap[key] = {
           name: p.name,
-          xuid: p.uuid,
+          xuid: p.xuid || p.uuid,
+          uuid: p.uuid,
           allowlisted: false,
           permission: 'member',
           hasData: true,
