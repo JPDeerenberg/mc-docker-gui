@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCPanel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<!-- ── Login ─────────────────────────────────────────────────────────────── -->
+<div id="view-login">
+  <div class="login-wrap">
+    <div class="login-logo">
+      <div class="icon">⛏</div>
+      <h1>MC<span>Panel</span></h1>
+      <p>Minecraft Server Manager</p>
+    </div>
+    <div class="login-card">
+      <div class="form-field">
+        <label>Username</label>
+        <input type="text" id="inp-user" placeholder="admin" autocomplete="username">
+      </div>
+      <div class="form-field">
+        <label>Password</label>
+        <input type="password" id="inp-pass" placeholder="••••••••" autocomplete="current-password">
+      </div>
+      <button class="btn-primary" id="login-btn">Sign In</button>
+      <div class="login-error hidden" id="login-error"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── App shell ─────────────────────────────────────────────────────────── -->
+<div id="view-app" class="hidden">
+  <nav class="topnav">
+    <div class="logo" id="nav-home">⛏ MC<span class="dot">Panel</span></div>
+    <div class="top-links" style="display: flex; gap: 10px; margin-left: 24px;">
+      <button class="top-link-btn active" data-page="dashboard">Servers</button>
+      <button class="top-link-btn" data-page="stats">Stats</button>
+    </div>
+    <div class="breadcrumb hidden" id="nav-breadcrumb" style="margin-left: 16px;">
+      <span class="sep">›</span>
+      <span class="current" id="nav-bc-name"></span>
+    </div>
+    <div class="spacer"></div>
+    <button class="logout-btn" id="logout-btn">Sign out</button>
+  </nav>
+
+  <!-- Dashboard page -->
+  <div class="main-content" id="page-dashboard">
+    <div class="section-header">
+      <div>
+        <h2>Servers</h2>
+        <p>Your Minecraft containers</p>
+      </div>
+      <button class="refresh-btn" id="refresh-btn">
+        <svg id="refresh-icon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+        Refresh
+      </button>
+    </div>
+    <div class="filter-pills" id="filter-pills">
+      <button class="pill active" data-filter="all">All</button>
+      <button class="pill java"    data-filter="java">☕ Java</button>
+      <button class="pill bedrock" data-filter="bedrock">🪨 Bedrock</button>
+    </div>
+    <div class="containers-grid" id="containers-grid"></div>
+  </div>
+
+  <!-- Stats page -->
+  <div class="main-content hidden" id="page-stats">
+    <div class="section-header">
+      <div>
+        <h2>System Stats</h2>
+        <p>Real-time host and container utilization</p>
+      </div>
+      <button class="refresh-btn" id="stats-refresh-btn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg>
+        Refresh
+      </button>
+    </div>
+
+    <!-- Host stats -->
+    <h3 style="font-size:15px; color:var(--text); margin-bottom:16px;">Host System</h3>
+    <div class="stats-grid" id="stats-host-grid">
+      <!-- Injected by JS -->
+    </div>
+
+    <!-- Minecraft servers stats -->
+    <h3 style="font-size:15px; color:var(--text); margin-bottom:16px;">Minecraft Servers</h3>
+    <div class="srv-stats-grid" id="stats-srv-grid">
+      <!-- Injected by JS -->
+    </div>
+  </div>
+
+  <!-- Container detail page -->
+  <div class="main-content hidden" id="page-container">
+    <div class="container-header">
+      <button class="back-btn" id="back-btn">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 12H5m7-7-7 7 7 7"/></svg>
+        Back
+      </button>
+      <h1 id="detail-name">Server</h1>
+      <span id="detail-type-badge" class="type-badge"></span>
+      <span id="detail-status" class="badge"></span>
+      <div class="spacer"></div>
+      <div class="action-btns">
+        <button class="action-btn start"  id="btn-start">▶ Start</button>
+        <button class="action-btn stop"   id="btn-stop">■ Stop</button>
+        <button class="action-btn restart"id="btn-restart">↺ Restart</button>
+      </div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="console">Console</button>
+      <button class="tab-btn"        data-tab="settings">Settings</button>
+      <button class="tab-btn"        data-tab="players">Players</button>
+    </div>
+
+    <!-- Console -->
+    <div id="tab-console">
+      <div class="console-wrap">
+        <div class="console-toolbar">
+          <div class="dot-row"><span></span><span></span><span></span></div>
+          <span class="label" id="console-label">logs</span>
+          <div class="spacer"></div>
+          <button class="autoscroll-btn on" id="autoscroll-btn" title="Toggle auto-scroll">⬇ Auto</button>
+          <button class="clear-btn" id="copy-log" title="Copy logs">Copy</button>
+          <button class="clear-btn" id="clear-log">Clear</button>
+        </div>
+        <div class="log-output" id="log-output"></div>
+        <div class="console-input-bar" style="position: relative;">
+          <span class="prompt">›</span>
+          <input type="text" id="cmd-input" placeholder="Type a command and press Enter…" autocomplete="off" spellcheck="false">
+          <button class="send-btn" id="cmd-send">Send</button>
+          <div id="cmd-autocomplete" class="autocomplete-popup hidden"></div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Settings -->
+    <div id="tab-settings" class="hidden">
+      <div class="settings-wrap">
+        <div class="settings-toolbar">
+          <p>Editing <code>/data/server.properties</code></p>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="settings-tabs">
+              <button class="stab-btn active" data-stab="visual">Visual</button>
+              <button class="stab-btn"        data-stab="raw">Raw</button>
+            </div>
+            <button class="save-btn" id="save-settings" style="background:var(--surface);border:1px solid var(--border);color:var(--text)">Save</button>
+            <button class="save-btn" id="save-restart-settings">Save & Restart</button>
+          </div>
+        </div>
+        <div class="bedrock-data-notice" id="settings-itzg-notice" style="margin-bottom:16px;background:rgba(77,159,255,.06);border-color:rgba(77,159,255,.2);color:var(--blue)">
+          ℹ️ <strong>Docker Note</strong> — If using an itzg image, settings are generated from environment variables on container start. Changes saved here persist through restarts, but may be overwritten if the container is recreated. For permanent changes, update your <code>docker-compose.yml</code> environment variables.
+        </div>
+        <div id="settings-visual">
+          <div id="props-grid"></div>
+        </div>
+        <div id="settings-raw" class="raw-textarea-wrap hidden">
+          <label>Raw server.properties</label>
+          <textarea id="raw-props" spellcheck="false"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Players -->
+    <div id="tab-players" class="hidden">
+      <div class="players-wrap">
+        <div class="players-toolbar">
+          <input type="text" class="players-search" id="players-search" placeholder="Search players…">
+          <span class="players-count" id="players-count"></span>
+          <button class="save-btn" id="add-player-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0">+ Add Player</button>
+          <button class="save-btn" id="remove-player-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0;background:rgba(255,179,64,0.1);color:var(--amber)">✕ Remove Player</button>
+        </div>
+        <div class="player-filter-tabs" id="player-filter-tabs"></div>
+        <div id="players-list-container"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toast-container"></div>
+
+<!-- Modal -->
+<div class="modal-overlay hidden" id="modal-overlay">
+  <div class="modal">
+    <h3 id="modal-title">Add Player</h3>
+    <div class="form-field">
+      <label id="modal-label">Username</label>
+      <input type="text" id="modal-input" placeholder="PlayerName">
+    </div>
+    <div class="modal-actions">
+      <button class="cancel-btn" id="modal-cancel">Cancel</button>
+      <button class="confirm-btn" id="modal-confirm">Add</button>
+    </div>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+</body>
+</html>

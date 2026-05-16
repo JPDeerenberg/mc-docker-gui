@@ -7,7 +7,8 @@ COPY package*.json leveldb-mcpe-1.0.1.tgz ./
 RUN npm install --omit=dev
 
 COPY server.js ./
-COPY index.html ./
+COPY src/ ./src/
+COPY public/ ./public/
 
 EXPOSE 3000
 
