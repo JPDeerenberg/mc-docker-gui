@@ -690,6 +690,37 @@ app.get('/api/containers/:id/player-data/:uuid', auth, async (req, res) => {
   }
 });
 
+// Delete player data files (Java only)
+app.delete('/api/containers/:id/player-data/:uuid', auth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const uuid = req.params.uuid;
+    const world = await getWorldFolder(id);
+    const container = docker.getContainer(id);
+
+    // Delete files via docker exec rm -f
+    const files = [
+      `/data/${world}/playerdata/${uuid}.dat`,
+      `/data/${world}/playerdata/${uuid}.dat_old`,
+      `/data/${world}/stats/${uuid}.json`,
+      `/data/${world}/advancements/${uuid}.json`
+    ];
+
+    for (const f of files) {
+      try {
+        const exec = await container.exec({ Cmd: ['rm', '-f', f] });
+        await exec.start();
+      } catch (e) {
+        console.error(`Failed to delete ${f}:`, e.message);
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Player stats (Java only — already JSON)
 app.get('/api/containers/:id/player-stats/:uuid', auth, async (req, res) => {
   try {

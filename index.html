@@ -1077,6 +1077,7 @@
           <input type="text" class="players-search" id="players-search" placeholder="Search players…">
           <span class="players-count" id="players-count"></span>
           <button class="save-btn" id="add-player-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0">+ Add Player</button>
+          <button class="save-btn" id="remove-player-btn" style="padding:6px 14px;font-size:12px;flex-shrink:0;background:rgba(255,179,64,0.1);color:var(--amber)">✕ Remove Player</button>
         </div>
         <div class="player-filter-tabs" id="player-filter-tabs"></div>
         <div id="players-list-container"></div>
@@ -2281,6 +2282,7 @@ function renderAllPlayers() {
       } else {
         actions += `<button class="pc-act-btn add" data-cmd="op ${name}" title="Make operator">+ OP</button>`;
       }
+      actions += `<button class="pc-act-btn ban" style="background:rgba(255,179,64,0.1);color:var(--amber);border-color:rgba(255,179,64,0.2)" data-cmd="kick ${name}" title="Kick player from server">Kick</button>`;
     } else {
       if (p.whitelisted) {
         actions += `<button class="pc-act-btn remove" data-cmd="whitelist remove ${name}" title="Remove from whitelist">✕ WL</button>`;
@@ -2292,6 +2294,7 @@ function renderAllPlayers() {
       } else {
         actions += `<button class="pc-act-btn add" data-cmd="op ${name}" title="Make operator">+ OP</button>`;
       }
+      actions += `<button class="pc-act-btn ban" style="background:rgba(255,179,64,0.1);color:var(--amber);border-color:rgba(255,179,64,0.2)" data-cmd="kick ${name}" title="Kick player from server">Kick</button>`;
       if (p.banned) {
         actions += `<button class="pc-act-btn add" data-cmd="pardon ${name}" title="Unban player">Pardon</button>`;
       } else {
@@ -2431,7 +2434,11 @@ function renderPlayerDetailTab(uuid, tab, pdata, pstats) {
       <div class="pd-stat-card"><div class="pd-stat-label">Position</div><div class="pd-stat-value"><span class="pd-stat-icon">📍</span>${pdata.position.join(', ')}</div><div class="pd-stat-sub">${escHtml(pdata.dimension)}</div></div>
       <div class="pd-stat-card"><div class="pd-stat-label">Score</div><div class="pd-stat-value"><span class="pd-stat-icon">🏆</span>${pdata.score}</div></div>
     </div>
-    ${pdata.armor.length ? `<div class="pd-inv-section"><div class="pd-inv-label">Armor</div><div class="pd-armor-grid">${renderArmorSlots(pdata.armor)}</div></div>` : ''}`;
+    ${pdata.armor.length ? `<div class="pd-inv-section"><div class="pd-inv-label">Armor</div><div class="pd-armor-grid">${renderArmorSlots(pdata.armor)}</div></div>` : ''}
+    ${state.serverType === 'java' ? `
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end">
+        <button class="pc-act-btn ban" onclick="confirmDeletePlayerData('${uuid}')" style="padding:8px 16px;font-size:12px">⚠️ Delete Player Data</button>
+      </div>` : ''}`;
 
   } else if (tab === 'inventory') {
     el.innerHTML = `<div class="pd-inv-section"><div class="pd-inv-label">Hotbar (selected: slot ${pdata.selectedSlot})</div><div class="pd-inv-grid">${renderInvSlots(pdata.inventory, 0, 8, pdata.selectedSlot)}</div></div>
@@ -2512,7 +2519,6 @@ function renderArmorSlots(armor) {
     return renderSingleSlot(item);
   }).join('');
 }
-
 // Add Player button opens modal
 document.getElementById('add-player-btn').addEventListener('click', () => {
   const isBedrock = state.serverType === 'bedrock';
@@ -2520,6 +2526,19 @@ document.getElementById('add-player-btn').addEventListener('click', () => {
   document.getElementById('modal-label').textContent = 'Player Name';
   document.getElementById('modal-input').value = '';
   document.getElementById('modal-input').placeholder = 'PlayerName';
+  document.getElementById('modal-overlay').dataset.mode = 'add';
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('modal-input').focus();
+});
+
+// Remove Player button
+document.getElementById('remove-player-btn').addEventListener('click', () => {
+  const isBedrock = state.serverType === 'bedrock';
+  document.getElementById('modal-title').textContent = isBedrock ? 'Remove from Allowlist' : 'Remove from Whitelist';
+  document.getElementById('modal-label').textContent = 'Player Name';
+  document.getElementById('modal-input').value = '';
+  document.getElementById('modal-input').placeholder = 'PlayerName';
+  document.getElementById('modal-overlay').dataset.mode = 'remove';
   document.getElementById('modal-overlay').classList.remove('hidden');
   document.getElementById('modal-input').focus();
 });
@@ -2529,8 +2548,35 @@ document.getElementById('modal-cancel').addEventListener('click', () => {
   document.getElementById('modal-overlay').classList.add('hidden');
 });
 
-document.getElementById('modal-confirm').addEventListener('click', confirmAddPlayer);
-document.getElementById('modal-input').addEventListener('keydown', e => { if (e.key === 'Enter') confirmAddPlayer(); });
+document.getElementById('modal-confirm').addEventListener('click', () => {
+  if (document.getElementById('modal-overlay').dataset.mode === 'remove') confirmRemovePlayer();
+  else confirmAddPlayer();
+});
+document.getElementById('modal-input').addEventListener('keydown', e => { 
+  if (e.key === 'Enter') {
+    if (document.getElementById('modal-overlay').dataset.mode === 'remove') confirmRemovePlayer();
+    else confirmAddPlayer();
+  }
+});
+
+async function confirmRemovePlayer() {
+  const val = document.getElementById('modal-input').value.trim();
+  if (!val) return;
+  document.getElementById('modal-overlay').classList.add('hidden');
+
+  const isBedrock = state.serverType === 'bedrock';
+  const cmd = isBedrock ? `allowlist remove ${val}` : `whitelist remove ${val}`;
+
+  try {
+    const res = await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: cmd });
+    // Also try to deop and kick
+    await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: `deop ${val}` });
+    await api('POST', `/api/containers/${state.currentContainer.Id}/command`, { command: `kick ${val} Removed by admin` });
+    
+    toast(res.response || `Removed ${val}!`, 'success');
+    setTimeout(() => loadPlayers(), 800);
+  } catch (e) { toast(e.message, 'error'); }
+}
 
 async function confirmAddPlayer() {
   const val = document.getElementById('modal-input').value.trim();
@@ -2545,6 +2591,19 @@ async function confirmAddPlayer() {
     toast(res.response || `Added ${val}!`, 'success');
     setTimeout(() => loadPlayers(), 800);
   } catch (e) { toast(e.message, 'error'); }
+}
+
+async function confirmDeletePlayerData(uuid) {
+  if (!confirm('Are you sure you want to PERMANENTLY delete this player\'s data? This includes inventory, stats, and achievements. This cannot be undone.')) return;
+  
+  try {
+    await api('DELETE', `/api/containers/${state.currentContainer.Id}/player-data/${uuid}`);
+    toast('Player data deleted successfully.', 'success');
+    state.selectedPlayerUuid = null;
+    setTimeout(() => loadPlayers(), 800);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 // ══════════════════════════════════════════════
