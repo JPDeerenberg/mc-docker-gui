@@ -632,9 +632,13 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
   let db = null;
 
   try {
+    console.log(`[bedrock] Extracting DB for container=${containerId}, world="${worldName}", player="${playerIdentifier}"`);
     const extracted = await extractBedrockDb(containerId, worldName);
     tmpPath = extracted.tmpPath;
+    console.log(`[bedrock] DB extracted to ${extracted.dbDir}`);
+    console.log(`[bedrock] Files: ${fs.readdirSync(extracted.dbDir).join(', ')}`);
     db = levelup(leveldown(extracted.dbDir));
+    console.log(`[bedrock] LevelDB opened successfully`);
 
     // Bedrock LevelDB stores player data under:
     //   "~local_player"         – the server host / realm owner
@@ -666,6 +670,8 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
       stream.on('end', resolve);
       stream.on('error', reject);
     });
+
+    console.log(`[bedrock] Found ${playerEntries.length} player entries: ${playerEntries.map(e => e.key).join(', ')}`);
 
     if (playerEntries.length === 0) {
       throw new Error('No player data found in the LevelDB database');
@@ -724,6 +730,7 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     return parseBedrockPlayerNbt(data);
 
   } catch (err) {
+    console.error(`[bedrock] FAILED:`, err.message);
     throw new Error(`Data extraction failed: ${err.message}`);
   } finally {
     if (db) {
@@ -743,7 +750,10 @@ app.get('/api/containers/:id/player-data/:uuid', auth, async (req, res) => {
     const { type = 'java' } = req.query;
     const world = await getWorldFolder(id);
 
+    console.log(`[player-data] type=${type}, world="${world}", uuid="${uuid}"`);
+
     if (type === 'bedrock') {
+      console.log(`[player-data] Bedrock path: /data/worlds/${world}/db`);
       const data = await getBedrockPlayerData(id, world, uuid);
       return res.json(data);
     }
@@ -796,6 +806,7 @@ app.get('/api/containers/:id/player-data/:uuid', auth, async (req, res) => {
 
     res.json(result);
   } catch (err) {
+    console.error(`[player-data] Error:`, err);
     res.status(500).json({ error: err.message });
   }
 });

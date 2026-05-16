@@ -2386,7 +2386,8 @@ async function loadPlayerDetail(uuid) {
     if (pstats) state.playerStatsCache[uuid] = pstats;
 
     if (!pdata) {
-      panel.innerHTML = '<div class="pd-error">Could not load player data. The .dat file may be corrupted or inaccessible.</div>';
+      const errMsg = dataRes.status === 'rejected' ? (dataRes.reason?.message || 'Unknown error') : 'No data returned';
+      panel.innerHTML = `<div class="pd-error">Could not load player data: ${escHtml(errMsg)}</div>`;
       return;
     }
 
