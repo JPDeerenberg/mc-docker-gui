@@ -653,11 +653,16 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
 
     // Discover what player keys exist in the database
     const allKeys = mcpeDb.getKeys();
+    console.log(`[bedrock] Total keys in DB: ${allKeys.length}`);
+    allKeys.forEach((k, i) => {
+      const buf = Buffer.from(k, 'binary');
+      console.log(`[bedrock] Key[${i}]: len=${buf.length}, hex=${buf.toString('hex')}, utf8="${buf.toString('utf8')}"`);
+    });
+
     const playerKeys = allKeys.filter(k =>
       k.startsWith('player_server_') || k.startsWith('player_') || k === '~local_player'
     );
-    console.log(`[bedrock] Total keys in DB: ${allKeys.length}, player keys: ${playerKeys.length}`);
-    console.log(`[bedrock] Player keys found: ${playerKeys.join(', ')}`);
+    console.log(`[bedrock] Player keys: ${playerKeys.length}`);
 
     if (playerKeys.length === 0) {
       mcpeDb.close();
