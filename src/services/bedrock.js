@@ -104,8 +104,27 @@ function parseBedrockPlayerNbt(data) {
   };
 }
 
-async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
+// ══════════════════════════════════════════════
+//  SERIALIZATION MUTEX QUEUE FOR SINGLETON LEVELDB
+// ══════════════════════════════════════════════
+let dbLock = Promise.resolve();
+
+async function runSerialized(fn) {
+  return new Promise((resolve, reject) => {
+    dbLock = dbLock.then(async () => {
+      try {
+        const result = await fn();
+        resolve(result);
+      } catch (err) {
+        reject(err);
+      }
+    });
+  });
+}
+
+async function getBedrockPlayerDataInternal(containerId, worldName, playerIdentifier) {
   let tmpPath = null;
+  let isOpen = false;
 
   try {
     console.log(`[bedrock] Extracting DB for container=${containerId}, world="${worldName}", player="${playerIdentifier}"`);
@@ -116,6 +135,7 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     console.log(`[bedrock] DB dir contents (${allFiles.length} items): ${allFiles.join(', ')}`);
 
     mcpeDb.open(extracted.dbDir);
+    isOpen = true;
     console.log(`[bedrock] LevelDB opened successfully`);
 
     // Discover what player keys exist in the database
@@ -127,6 +147,7 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
 
     if (playerKeys.length === 0) {
       mcpeDb.close();
+      isOpen = false;
       const err = new Error('Player has not joined this server yet');
       err.code = 'PLAYER_NOT_JOINED';
       throw err;
@@ -201,6 +222,7 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     }
 
     mcpeDb.close();
+    isOpen = false;
 
     if (!rawStr || rawStr.length === 0) {
       throw new Error(`Player data not found for "${playerIdentifier}" (searched ${playerKeys.length} keys)`);
@@ -216,8 +238,11 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     return parseBedrockPlayerNbt(data);
 
   } catch (err) {
-    console.error(`[bedrock] FAILED:`, err.message);
-    try { mcpeDb.close(); } catch (e) {}
+    console.error(`[bedrock] getBedrockPlayerDataInternal FAILED:`, err.message);
+    if (isOpen) {
+      try { mcpeDb.close(); } catch (e) {}
+      isOpen = false;
+    }
     throw new Error(`Data extraction failed: ${err.message}`);
   } finally {
     if (tmpPath) {
@@ -226,8 +251,84 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
   }
 }
 
+async function getBedrockPlayersInternal(containerId, worldName) {
+  let tmpPath = null;
+  let isOpen = false;
+
+  try {
+    console.log(`[bedrock] Extracting DB for player listing: container=${containerId}, world="${worldName}"`);
+    const extracted = await extractBedrockDb(containerId, worldName);
+    tmpPath = extracted.tmpPath;
+    console.log(`[bedrock] DB extracted to ${extracted.dbDir}`);
+
+    mcpeDb.open(extracted.dbDir);
+    isOpen = true;
+    console.log(`[bedrock] LevelDB opened successfully for listing`);
+
+    const allKeys = mcpeDb.getKeys();
+    const playerKeys = allKeys.filter(k =>
+      k.startsWith('player_server_') || k.startsWith('player_') || k === '~local_player'
+    );
+    console.log(`[bedrock] DB has ${playerKeys.length} player keys`);
+
+    const players = [];
+    for (const key of playerKeys) {
+      const val = mcpeDb.get(key);
+      if (!val || val.length === 0) continue;
+      try {
+        const buf = Buffer.from(val, 'binary');
+        const { parsed } = await nbt.parse(buf, 'little');
+        const data = nbt.simplify(parsed);
+
+        let uuid = '';
+        if (key.startsWith('player_server_')) {
+          uuid = key.slice('player_server_'.length);
+        } else if (key.startsWith('player_')) {
+          uuid = key.slice('player_'.length);
+        } else {
+          uuid = key; // ~local_player
+        }
+
+        players.push({
+          uuid,
+          name: data.NameTag || 'Unknown',
+          hasData: true
+        });
+      } catch (e) {
+        console.error(`[bedrock] Failed to parse player key "${key}" during listing:`, e.message);
+      }
+    }
+
+    mcpeDb.close();
+    isOpen = false;
+    return players;
+
+  } catch (err) {
+    console.error(`[bedrock] getBedrockPlayersInternal FAILED:`, err.message);
+    if (isOpen) {
+      try { mcpeDb.close(); } catch (e) {}
+      isOpen = false;
+    }
+    // Return empty array instead of throwing to prevent complete UI crash when world has no players/DB yet
+    return [];
+  } finally {
+    if (tmpPath) {
+      fs.rmSync(tmpPath, { recursive: true, force: true });
+    }
+  }
+}
+
+async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
+  return runSerialized(() => getBedrockPlayerDataInternal(containerId, worldName, playerIdentifier));
+}
+
+async function getBedrockPlayers(containerId, worldName) {
+  return runSerialized(() => getBedrockPlayersInternal(containerId, worldName));
+}
+
 module.exports = {
   extractBedrockDb,
   parseBedrockPlayerNbt,
-  getBedrockPlayerData
+  getBedrockPlayerData,
+  getBedrockPlayers
 };

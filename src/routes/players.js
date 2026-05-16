@@ -13,7 +13,7 @@ const {
   listContainerDir,
   getWorldFolder
 } = require('../services/docker');
-const { getBedrockPlayerData } = require('../services/bedrock');
+const { getBedrockPlayerData, getBedrockPlayers } = require('../services/bedrock');
 
 const JAVA_PLAYER_FILES = [
   'whitelist.json',
@@ -77,34 +77,86 @@ router.get('/:id/all-players', auth, async (req, res) => {
 
   try {
     if (type === 'bedrock') {
-      // Bedrock: merge allowlist + permissions
+      const world = await getWorldFolder(id);
+
+      // Bedrock: merge allowlist + permissions + leveldb players
       let allowlist = [], permissions = [];
       try { allowlist = JSON.parse(await readContainerFile(id, '/data/allowlist.json')); } catch {}
       try { permissions = JSON.parse(await readContainerFile(id, '/data/permissions.json')); } catch {}
 
+      let leveldbPlayers = [];
+      try {
+        leveldbPlayers = await getBedrockPlayers(id, world);
+      } catch (err) {
+        console.error(`[bedrock-routes] Failed to scan LevelDB for players:`, err.message);
+      }
+
       const playerMap = {};
-      for (const p of allowlist) {
-        const key = p.name || p.xuid || 'unknown';
+
+      // 1. Populate from LevelDB players (they have data!)
+      for (const p of leveldbPlayers) {
+        const key = p.uuid;
         playerMap[key] = {
-          name: p.name || 'Unknown',
-          xuid: p.xuid || '',
-          allowlisted: true,
+          name: p.name,
+          xuid: p.uuid,
+          allowlisted: false,
           permission: 'member',
           hasData: true,
         };
       }
-      for (const p of permissions) {
-        const key = p.xuid || p.name || 'unknown';
-        if (playerMap[key]) {
-          playerMap[key].permission = p.permission || 'member';
-          playerMap[key].hasData = true;
+
+      // 2. Merge allowlist
+      for (const p of allowlist) {
+        const xuid = p.xuid || '';
+        const name = p.name || '';
+        
+        let matched = null;
+        if (xuid && playerMap[xuid]) {
+          matched = playerMap[xuid];
         } else {
+          matched = Object.values(playerMap).find(lp => lp.name.toLowerCase() === name.toLowerCase());
+        }
+
+        if (matched) {
+          matched.allowlisted = true;
+          if (p.xuid) matched.xuid = p.xuid;
+          if (p.name) matched.name = p.name;
+        } else {
+          const key = xuid || name || 'unknown';
           playerMap[key] = {
-            name: p.name || p.xuid || 'Unknown',
-            xuid: p.xuid || '',
+            name: name || 'Unknown',
+            xuid: xuid,
+            allowlisted: true,
+            permission: 'member',
+            hasData: false,
+          };
+        }
+      }
+
+      // 3. Merge permissions
+      for (const p of permissions) {
+        const xuid = p.xuid || '';
+        const name = p.name || '';
+
+        let matched = null;
+        if (xuid && playerMap[xuid]) {
+          matched = playerMap[xuid];
+        } else {
+          matched = Object.values(playerMap).find(lp => lp.name.toLowerCase() === name.toLowerCase());
+        }
+
+        if (matched) {
+          matched.permission = p.permission || 'member';
+          if (p.xuid) matched.xuid = p.xuid;
+          if (p.name) matched.name = p.name;
+        } else {
+          const key = xuid || name || 'unknown';
+          playerMap[key] = {
+            name: name || xuid || 'Unknown',
+            xuid: xuid,
             allowlisted: false,
             permission: p.permission || 'member',
-            hasData: true,
+            hasData: false,
           };
         }
       }
@@ -112,7 +164,7 @@ router.get('/:id/all-players', auth, async (req, res) => {
       res.json({
         players: Object.values(playerMap),
         hasPlayerData: true,
-        worldFolder: 'Bedrock level',
+        worldFolder: world,
       });
     } else {
       // Java: merge usercache + whitelist + ops + bans + playerdata folder
