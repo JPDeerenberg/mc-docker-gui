@@ -13,7 +13,7 @@ const nbt = require('prismarine-nbt');
 const levelup = require('levelup');
 const leveldown = require('leveldb-mcpe');
 const fs = require('fs');
-const { execSync } = require('child_process');
+
 const os = require('os');
 // ─── Config ──────────────────────────────────────────────────────────────────
 
@@ -541,87 +541,197 @@ app.get('/api/stats', auth, async (req, res) => {
 
 // ─── Bedrock LevelDB Extractor ───────────────────────────────────────────────
 
-async function getBedrockPlayerData(containerId, worldName, playerUuid) {
+/**
+ * Extract the LevelDB directory from a Bedrock container using dockerode's
+ * getArchive API (no docker CLI needed) and save it to a local temp path.
+ */
+async function extractBedrockDb(containerId, worldName) {
   const tmpPath = `/tmp/mcpanel_db_${containerId}_${Date.now()}`;
-  
-  // Extract to local filesystem
-  execSync(`docker cp ${containerId}:/data/worlds/"${worldName}"/db ${tmpPath}`);
+  fs.mkdirSync(tmpPath, { recursive: true });
 
-  const db = levelup(leveldown(tmpPath));
+  const container = docker.getContainer(containerId);
+  const dbPath = `/data/worlds/${worldName}/db`;
+  const stream = await container.getArchive({ path: dbPath });
+
+  await new Promise((resolve, reject) => {
+    const extract = tar.extract();
+    extract.on('entry', (header, entryStream, next) => {
+      // header.name is like "db/000003.log", "db/CURRENT", etc.
+      const dest = path.join(tmpPath, header.name);
+      if (header.type === 'directory') {
+        fs.mkdirSync(dest, { recursive: true });
+        entryStream.on('end', next);
+        entryStream.resume();
+      } else {
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        const ws = fs.createWriteStream(dest);
+        entryStream.pipe(ws);
+        entryStream.on('end', next);
+      }
+    });
+    extract.on('finish', resolve);
+    extract.on('error', reject);
+    stream.pipe(extract);
+  });
+
+  // The tar archive extracts to tmpPath/db/ — return the db subfolder
+  const dbDir = path.join(tmpPath, 'db');
+  if (fs.existsSync(dbDir)) return { dbDir, tmpPath };
+  // If there's no "db" subdirectory, the archive root IS the db contents
+  return { dbDir: tmpPath, tmpPath };
+}
+
+/**
+ * Parse Bedrock NBT player data into a normalised result object.
+ */
+function parseBedrockPlayerNbt(data) {
+  const GAMEMODES = ['Survival', 'Creative', 'Adventure', 'Survival Spectator', 'Creative Spectator', 'Fallback', 'Spectator'];
+  const DIMENSIONS = { 0: 'Overworld', 1: 'Nether', 2: 'The End' };
+
+  const attributes = data.Attributes || [];
+  const getAttr = (name, def) => {
+    const attr = attributes.find(a => a.Name === name);
+    return attr ? attr.Current : def;
+  };
+
+  return {
+    health: getAttr('minecraft:health', 20),
+    maxHealth: getAttr('minecraft:health', 20),
+    foodLevel: getAttr('minecraft:player.hunger', 20),
+    foodSaturation: getAttr('minecraft:player.saturation', 5),
+    xpLevel: getAttr('minecraft:player.level', 0),
+    xpTotal: data.PlayerLevel ?? 0,
+    score: 0,
+    gamemode: GAMEMODES[data.PlayerGameMode] || `Unknown (${data.PlayerGameMode})`,
+    dimension: DIMENSIONS[data.DimensionId] || `Unknown (${data.DimensionId})`,
+    position: data.Pos ? data.Pos.map(v => Math.round(v)) : [0, 0, 0],
+    inventory: (data.Inventory || []).map(item => ({
+      slot: item.Slot,
+      id: (item.Name || '').replace('minecraft:', ''),
+      count: item.Count || item.count || 1,
+      damage: item.Damage || 0
+    })),
+    enderChest: (data.EnderChestInventory || []).map(item => ({
+      slot: item.Slot,
+      id: (item.Name || '').replace('minecraft:', ''),
+      count: item.Count || item.count || 1,
+      damage: item.Damage || 0
+    })),
+    armor: (data.Armor || []).map((item, i) => ({
+      slot: 100 + i,
+      id: (item.Name || '').replace('minecraft:', ''),
+      count: item.Count || 1,
+      damage: item.Damage || 0
+    })),
+    selectedSlot: 0
+  };
+}
+
+async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
+  let tmpPath = null;
+  let db = null;
+
   try {
-    let rawData = null;
-    try {
-      rawData = await db.get(Buffer.from(`player_server_${playerUuid}`));
-    } catch (err) {}
+    const extracted = await extractBedrockDb(containerId, worldName);
+    tmpPath = extracted.tmpPath;
+    db = levelup(leveldown(extracted.dbDir));
 
-    if (!rawData) {
-      try {
-        rawData = await db.get(Buffer.from(`player_${playerUuid}`));
-      } catch (err) {}
+    // Bedrock LevelDB stores player data under:
+    //   "~local_player"         – the server host / realm owner
+    //   "player_server_<UUID>"  – remote players (UUID format, NOT XUID)
+    //   "player_<UUID>"         – older format
+    //
+    // We receive an XUID or player name from the frontend, but the DB keys
+    // use UUIDs. So we must scan all player entries, parse NBT, and try to
+    // match by checking if the raw NBT bytes contain the identifier string,
+    // or if there's only one player, just return that.
+
+    const playerEntries = [];
+
+    // 1. Check ~local_player
+    try {
+      const localData = await db.get(Buffer.from('~local_player'));
+      playerEntries.push({ key: '~local_player', value: localData });
+    } catch (err) { /* key not found */ }
+
+    // 2. Scan all player_server_* and player_* keys
+    await new Promise((resolve, reject) => {
+      const stream = db.createReadStream();
+      stream.on('data', (entry) => {
+        const keyStr = entry.key.toString('utf8');
+        if (keyStr.startsWith('player_server_') || keyStr.startsWith('player_')) {
+          playerEntries.push({ key: keyStr, value: entry.value });
+        }
+      });
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+
+    if (playerEntries.length === 0) {
+      throw new Error('No player data found in the LevelDB database');
     }
 
+    // 3. Try to find the right player entry
+    let rawData = null;
+
+    // First, try exact key matches (in case the identifier IS a UUID)
+    for (const entry of playerEntries) {
+      if (entry.key === `player_server_${playerIdentifier}` ||
+          entry.key === `player_${playerIdentifier}`) {
+        rawData = entry.value;
+        break;
+      }
+    }
+
+    // Second, search for the identifier (XUID or name) in the raw NBT bytes
     if (!rawData) {
-      // Fallback: search values for the UUID/XUID string
-      for await (const data of db.createReadStream({ gte: 'player', lte: 'player\xff' })) {
-        if (data.value.toString('utf8').includes(playerUuid)) {
-          rawData = data.value;
+      for (const entry of playerEntries) {
+        const raw = entry.value.toString('utf8');
+        if (raw.includes(playerIdentifier)) {
+          rawData = entry.value;
           break;
         }
       }
     }
 
+    // Third, if only one player entry exists, use it
+    if (!rawData && playerEntries.length === 1) {
+      rawData = playerEntries[0].value;
+    }
+
+    // Fourth, try parsing each entry's NBT and check if the player name matches
     if (!rawData) {
-      throw new Error(`Data not found for UUID/XUID ${playerUuid}`);
+      for (const entry of playerEntries) {
+        try {
+          const { parsed } = await nbt.parse(entry.value, 'little');
+          const d = nbt.simplify(parsed);
+          // Check if the parsed data contains identifying info
+          const nameTag = d.NameTag || '';
+          if (nameTag.toLowerCase() === playerIdentifier.toLowerCase()) {
+            rawData = entry.value;
+            break;
+          }
+        } catch (e) { /* skip unparseable entries */ }
+      }
+    }
+
+    if (!rawData) {
+      throw new Error(`Player data not found for "${playerIdentifier}" (searched ${playerEntries.length} entries)`);
     }
 
     const { parsed } = await nbt.parse(rawData, 'little');
     const data = nbt.simplify(parsed);
+    return parseBedrockPlayerNbt(data);
 
-    const GAMEMODES = ['Survival', 'Creative', 'Adventure', 'Survival Spectator', 'Creative Spectator', 'Fallback', 'Spectator'];
-    const DIMENSIONS = { 0: 'Overworld', 1: 'Nether', 2: 'The End' };
-
-    const attributes = data.Attributes || [];
-    const getAttr = (name, def) => {
-      const attr = attributes.find(a => a.Name === name);
-      return attr ? attr.Current : def;
-    };
-
-    return {
-      health: getAttr('minecraft:health', 20),
-      maxHealth: getAttr('minecraft:health', 20), // Max is also in attr.Max but this is fine
-      foodLevel: getAttr('minecraft:player.hunger', 20),
-      foodSaturation: getAttr('minecraft:player.saturation', 5),
-      xpLevel: getAttr('minecraft:player.level', 0),
-      xpTotal: data.PlayerLevel ?? 0,
-      score: 0,
-      gamemode: GAMEMODES[data.PlayerGameMode] || `Unknown (${data.PlayerGameMode})`,
-      dimension: DIMENSIONS[data.DimensionId] || `Unknown (${data.DimensionId})`,
-      position: data.Pos ? data.Pos.map(v => Math.round(v)) : [0,0,0],
-      inventory: (data.Inventory || []).map(item => ({
-        slot: item.Slot,
-        id: (item.Name || '').replace('minecraft:', ''),
-        count: item.Count || item.count || 1,
-        damage: item.Damage || 0
-      })),
-      enderChest: (data.EnderChestInventory || []).map(item => ({
-        slot: item.Slot,
-        id: (item.Name || '').replace('minecraft:', ''),
-        count: item.Count || item.count || 1,
-        damage: item.Damage || 0
-      })),
-      armor: (data.Armor || []).map((item, i) => ({
-        slot: 100 + i,
-        id: (item.Name || '').replace('minecraft:', ''),
-        count: item.Count || 1,
-        damage: item.Damage || 0
-      })),
-      selectedSlot: 0
-    };
   } catch (err) {
     throw new Error(`Data extraction failed: ${err.message}`);
   } finally {
-    await db.close();
-    fs.rmSync(tmpPath, { recursive: true, force: true });
+    if (db) {
+      try { await db.close(); } catch (e) {}
+    }
+    if (tmpPath) {
+      fs.rmSync(tmpPath, { recursive: true, force: true });
+    }
   }
 }
 
