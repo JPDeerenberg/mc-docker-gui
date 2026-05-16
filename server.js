@@ -552,26 +552,37 @@ async function extractBedrockDb(containerId, worldName) {
   const dbPath = `/data/worlds/${worldName}/db`;
   const stream = await container.getArchive({ path: dbPath });
 
+  const extractedFiles = [];
   await new Promise((resolve, reject) => {
     const extract = tar.extract();
     extract.on('entry', (header, entryStream, next) => {
-      // header.name is like "db/000003.log", "db/CURRENT", etc.
       const dest = path.join(tmpPath, header.name);
       if (header.type === 'directory') {
         fs.mkdirSync(dest, { recursive: true });
         entryStream.on('end', next);
         entryStream.resume();
-      } else {
+      } else if (header.type === 'file') {
         fs.mkdirSync(path.dirname(dest), { recursive: true });
         const ws = fs.createWriteStream(dest);
+        ws.on('error', reject);
+        // Wait for write stream to CLOSE (fully flushed) before processing next entry
+        ws.on('close', () => {
+          extractedFiles.push(header.name);
+          next();
+        });
         entryStream.pipe(ws);
+      } else {
+        // Skip symlinks, etc.
         entryStream.on('end', next);
+        entryStream.resume();
       }
     });
     extract.on('finish', resolve);
     extract.on('error', reject);
     stream.pipe(extract);
   });
+
+  console.log(`[bedrock] Extracted ${extractedFiles.length} files: ${extractedFiles.join(', ')}`);
 
   // The tar archive extracts to tmpPath/db/ — return the db subfolder
   const dbDir = path.join(tmpPath, 'db');
@@ -634,7 +645,12 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     const extracted = await extractBedrockDb(containerId, worldName);
     tmpPath = extracted.tmpPath;
     console.log(`[bedrock] DB extracted to ${extracted.dbDir}`);
-    console.log(`[bedrock] Files: ${fs.readdirSync(extracted.dbDir).join(', ')}`);
+    // List all files in the db directory (including any subdirs)
+    const allFiles = fs.readdirSync(extracted.dbDir);
+    console.log(`[bedrock] DB dir contents (${allFiles.length} items): ${allFiles.join(', ')}`);
+    // Also list the parent tmpPath to see full structure
+    const tmpContents = fs.readdirSync(extracted.tmpPath);
+    console.log(`[bedrock] Tmp root contents: ${tmpContents.join(', ')}`);
 
     // leveldb-mcpe has a simple sync API: open(path), get(key), close()
     // It uses a single global DB handle. get() returns raw bytes as a JS string.
