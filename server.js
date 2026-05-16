@@ -10,8 +10,7 @@ const path = require('path');
 const tar = require('tar-stream');
 const { PassThrough } = require('stream');
 const nbt = require('prismarine-nbt');
-const levelup = require('levelup');
-const leveldown = require('leveldb-mcpe');
+const mcpeDb = require('leveldb-mcpe');
 const fs = require('fs');
 
 const os = require('os');
@@ -629,7 +628,6 @@ function parseBedrockPlayerNbt(data) {
 
 async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
   let tmpPath = null;
-  let db = null;
 
   try {
     console.log(`[bedrock] Extracting DB for container=${containerId}, world="${worldName}", player="${playerIdentifier}"`);
@@ -637,7 +635,11 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     tmpPath = extracted.tmpPath;
     console.log(`[bedrock] DB extracted to ${extracted.dbDir}`);
     console.log(`[bedrock] Files: ${fs.readdirSync(extracted.dbDir).join(', ')}`);
-    db = levelup(leveldown(extracted.dbDir));
+
+    // leveldb-mcpe has a simple sync API: open(path), get(key), close()
+    // It uses a single global DB handle. get() returns raw bytes as a JS string.
+    // There is NO iterator — we can only get by known key.
+    mcpeDb.open(extracted.dbDir);
     console.log(`[bedrock] LevelDB opened successfully`);
 
     // Bedrock LevelDB stores player data under:
@@ -645,97 +647,53 @@ async function getBedrockPlayerData(containerId, worldName, playerIdentifier) {
     //   "player_server_<UUID>"  – remote players (UUID format, NOT XUID)
     //   "player_<UUID>"         – older format
     //
-    // We receive an XUID or player name from the frontend, but the DB keys
-    // use UUIDs. So we must scan all player entries, parse NBT, and try to
-    // match by checking if the raw NBT bytes contain the identifier string,
-    // or if there's only one player, just return that.
+    // We receive an XUID or player name from the frontend.
+    // Since we can't iterate keys, we try direct key lookups first,
+    // then fall back to ~local_player.
 
-    const playerEntries = [];
+    let rawStr = null;
+    let matchedKey = null;
 
-    // 1. Check ~local_player
-    try {
-      const localData = await db.get(Buffer.from('~local_player'));
-      playerEntries.push({ key: '~local_player', value: localData });
-    } catch (err) { /* key not found */ }
+    const keysToTry = [
+      `player_server_${playerIdentifier}`,
+      `player_${playerIdentifier}`,
+      `~local_player`,
+    ];
 
-    // 2. Scan all player_server_* and player_* keys
-    await new Promise((resolve, reject) => {
-      const stream = db.createReadStream();
-      stream.on('data', (entry) => {
-        const keyStr = entry.key.toString('utf8');
-        if (keyStr.startsWith('player_server_') || keyStr.startsWith('player_')) {
-          playerEntries.push({ key: keyStr, value: entry.value });
-        }
-      });
-      stream.on('end', resolve);
-      stream.on('error', reject);
-    });
-
-    console.log(`[bedrock] Found ${playerEntries.length} player entries: ${playerEntries.map(e => e.key).join(', ')}`);
-
-    if (playerEntries.length === 0) {
-      throw new Error('No player data found in the LevelDB database');
-    }
-
-    // 3. Try to find the right player entry
-    let rawData = null;
-
-    // First, try exact key matches (in case the identifier IS a UUID)
-    for (const entry of playerEntries) {
-      if (entry.key === `player_server_${playerIdentifier}` ||
-          entry.key === `player_${playerIdentifier}`) {
-        rawData = entry.value;
-        break;
-      }
-    }
-
-    // Second, search for the identifier (XUID or name) in the raw NBT bytes
-    if (!rawData) {
-      for (const entry of playerEntries) {
-        const raw = entry.value.toString('utf8');
-        if (raw.includes(playerIdentifier)) {
-          rawData = entry.value;
+    for (const key of keysToTry) {
+      try {
+        const result = mcpeDb.get(key);
+        if (result && result.length > 0) {
+          rawStr = result;
+          matchedKey = key;
+          console.log(`[bedrock] Found data with key "${key}" (${result.length} bytes)`);
           break;
         }
+      } catch (e) {
+        // key not found or read error
       }
     }
 
-    // Third, if only one player entry exists, use it
-    if (!rawData && playerEntries.length === 1) {
-      rawData = playerEntries[0].value;
+    if (!rawStr) {
+      throw new Error(`Player data not found for "${playerIdentifier}". Tried keys: ${keysToTry.join(', ')}`);
     }
 
-    // Fourth, try parsing each entry's NBT and check if the player name matches
-    if (!rawData) {
-      for (const entry of playerEntries) {
-        try {
-          const { parsed } = await nbt.parse(entry.value, 'little');
-          const d = nbt.simplify(parsed);
-          // Check if the parsed data contains identifying info
-          const nameTag = d.NameTag || '';
-          if (nameTag.toLowerCase() === playerIdentifier.toLowerCase()) {
-            rawData = entry.value;
-            break;
-          }
-        } catch (e) { /* skip unparseable entries */ }
-      }
-    }
+    mcpeDb.close();
 
-    if (!rawData) {
-      throw new Error(`Player data not found for "${playerIdentifier}" (searched ${playerEntries.length} entries)`);
-    }
+    // mcpeDb.get() returns binary data as a JS string — convert to Buffer for NBT parsing
+    const rawBuffer = Buffer.from(rawStr, 'binary');
+    console.log(`[bedrock] Parsing NBT from key "${matchedKey}" (${rawBuffer.length} bytes)`);
 
-    const { parsed } = await nbt.parse(rawData, 'little');
+    const { parsed } = await nbt.parse(rawBuffer, 'little');
     const data = nbt.simplify(parsed);
+    console.log(`[bedrock] NBT parsed successfully. GameMode=${data.PlayerGameMode}, Pos=${data.Pos}`);
     return parseBedrockPlayerNbt(data);
 
   } catch (err) {
     console.error(`[bedrock] FAILED:`, err.message);
+    try { mcpeDb.close(); } catch (e) {}
     throw new Error(`Data extraction failed: ${err.message}`);
   } finally {
-    if (db) {
-      try { await db.close(); } catch (e) {}
-    }
     if (tmpPath) {
       fs.rmSync(tmpPath, { recursive: true, force: true });
     }
