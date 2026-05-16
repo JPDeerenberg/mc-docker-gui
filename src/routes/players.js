@@ -3,6 +3,7 @@
 const express = require('express');
 const router = express.Router();
 const path = require('path');
+const fs = require('fs');
 const nbt = require('prismarine-nbt');
 const auth = require('../middleware/auth');
 const {
@@ -13,7 +14,7 @@ const {
   listContainerDir,
   getWorldFolder
 } = require('../services/docker');
-const { getBedrockPlayerData, getBedrockPlayers } = require('../services/bedrock');
+const { getBedrockPlayerData, getBedrockPlayers, extractBedrockDb } = require('../services/bedrock');
 
 const JAVA_PLAYER_FILES = [
   'whitelist.json',
@@ -278,6 +279,42 @@ router.get('/:id/all-players', auth, async (req, res) => {
       });
     }
   } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Export Bedrock leveldb database as a tarball download
+router.get('/:id/export-db', auth, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const world = await getWorldFolder(id);
+    console.log(`[export-db] Extracting DB for container=${id}, world="${world}"`);
+
+    const { dbDir, tmpPath } = await extractBedrockDb(id, world);
+    console.log(`[export-db] DB extracted to ${dbDir}`);
+
+    // Create a tar archive of the extracted DB folder using child_process
+    const { exec } = require('child_process');
+    const tarPath = `${tmpPath}.tar.gz`;
+
+    exec(`tar -czf ${tarPath} -C ${path.dirname(dbDir)} ${path.basename(dbDir)}`, (err) => {
+      if (err) {
+        console.error(`[export-db] Failed to tar:`, err.message);
+        try { fs.rmSync(tmpPath, { recursive: true, force: true }); } catch {}
+        return res.status(500).json({ error: `Failed to archive database: ${err.message}` });
+      }
+
+      res.download(tarPath, `${world}_db.tar.gz`, (downloadErr) => {
+        // Clean up both the temp folder and the tar file after download
+        try { fs.rmSync(tmpPath, { recursive: true, force: true }); } catch {}
+        try { fs.unlinkSync(tarPath); } catch {}
+        if (downloadErr && !res.headersSent) {
+          console.error(`[export-db] Download error:`, downloadErr.message);
+        }
+      });
+    });
+  } catch (err) {
+    console.error(`[export-db] Error:`, err);
     res.status(500).json({ error: err.message });
   }
 });
