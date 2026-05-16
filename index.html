@@ -2376,8 +2376,8 @@ async function loadPlayerDetail(uuid) {
   try {
     // Load data + stats in parallel
     const [dataRes, statsRes] = await Promise.allSettled([
-      state.playerDataCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-data/${uuid}?type=${state.currentContainer.serverType}`),
-      state.playerStatsCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-stats/${uuid}?type=${state.currentContainer.serverType}`).catch(() => null),
+      state.playerDataCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-data/${uuid}?type=${state.serverType}`),
+      state.playerStatsCache[uuid] || api('GET', `/api/containers/${state.currentContainer.Id}/player-stats/${uuid}?type=${state.serverType}`).catch(() => null),
     ]);
 
     const pdata = dataRes.status === 'fulfilled' ? dataRes.value : null;
