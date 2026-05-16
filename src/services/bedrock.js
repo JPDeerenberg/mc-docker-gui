@@ -194,7 +194,7 @@ async function getBedrockPlayerDataInternal(containerId, worldName, playerIdenti
         const val = mcpeDb.get(key);
         if (!val || val.length === 0) continue;
         try {
-          const buf = Buffer.from(val, 'binary');
+          const buf = Buffer.isBuffer(val) ? val : Buffer.from(val, 'binary');
           const { parsed } = await nbt.parse(buf, 'little');
           const d = nbt.simplify(parsed);
           const nameTag = d.NameTag || '';
@@ -228,8 +228,8 @@ async function getBedrockPlayerDataInternal(containerId, worldName, playerIdenti
       throw new Error(`Player data not found for "${playerIdentifier}" (searched ${playerKeys.length} keys)`);
     }
 
-    // mcpeDb.get() returns binary data as a JS string — convert to Buffer for NBT parsing
-    const rawBuffer = Buffer.from(rawStr, 'binary');
+    // mcpeDb.get() returns binary data as a JS Buffer or string — convert to Buffer for NBT parsing
+    const rawBuffer = Buffer.isBuffer(rawStr) ? rawStr : Buffer.from(rawStr, 'binary');
     console.log(`[bedrock] Parsing NBT from key "${matchedKey}" (${rawBuffer.length} bytes)`);
 
     const { parsed } = await nbt.parse(rawBuffer, 'little');
@@ -279,7 +279,7 @@ async function getBedrockPlayersInternal(containerId, worldName) {
       const val = mcpeDb.get(key);
       if (!val || val.length === 0) continue;
       try {
-        const buf = Buffer.from(val, 'binary');
+        const buf = Buffer.isBuffer(val) ? val : Buffer.from(val, 'binary');
         const { parsed } = await nbt.parse(buf, 'little');
         const data = nbt.simplify(parsed);
 
