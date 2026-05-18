@@ -130,6 +130,22 @@ document.getElementById('logout-btn').addEventListener('click', () => {
   showView('login');
 });
 
+// Auto-login from URL params (Android Wrapper support)
+window.addEventListener('DOMContentLoaded', () => {
+  const params = new URLSearchParams(window.location.search);
+  const mcu = params.get('mcuser');
+  const mcp = params.get('mcpass');
+  if (mcu && mcp) {
+    // Clear URL to hide credentials
+    window.history.replaceState({}, document.title, window.location.pathname);
+    document.getElementById('inp-user').value = mcu;
+    document.getElementById('inp-pass').value = mcp;
+    setTimeout(() => {
+      document.getElementById('login-btn').click();
+    }, 100);
+  }
+});
+
 // ══════════════════════════════════════════════
 //  DASHBOARD
 // ══════════════════════════════════════════════
@@ -1417,7 +1433,7 @@ function renderSingleSlot(item, isSelected) {
       <img src="${itemUrl}" 
            alt="${escHtml(item.id)}"
            class="pd-item-img"
-           onerror="if (this.src !== '${blockUrl}') { this.src = '${blockUrl}'; } else { this.replaceWith(document.createTextNode('${fallbackIcon}')); }" />
+           onerror="if (!this.dataset.triedBlock) { this.dataset.triedBlock = 'true'; this.src = '${blockUrl}'; } else { this.replaceWith(document.createTextNode('${fallbackIcon}')); }" />
     </span>
     ${item.count > 1 ? `<span class="item-count">${item.count}</span>` : ''}
   </div>`;

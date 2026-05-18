@@ -922,3 +922,125 @@ input:focus, textarea:focus {
 @keyframes fadeIn    { from { opacity:0; } to { opacity:1; } }
 @keyframes slideUp   { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:none; } }
 @keyframes slideRight{ from { opacity:0; transform:translateX(20px); } to { opacity:1; transform:none; } }
+
+/* ══════════════════════════════════════════════
+   MOBILE UI MAKEOVER
+   ══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 16px 12px;
+  }
+  
+  .topnav {
+    padding: 0 12px;
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .topnav .top-links {
+    order: 3;
+    width: 100%;
+    margin-left: 0 !important;
+    padding: 8px 0;
+    justify-content: center;
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+
+  .topnav .breadcrumb {
+    display: none;
+  }
+
+  .containers-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .stats-grid, .srv-stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .container-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .container-header .spacer {
+    display: none;
+  }
+
+  .action-btns {
+    width: 100%;
+    justify-content: stretch;
+    margin-top: 12px;
+  }
+
+  .action-btn {
+    flex: 1;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  .tabs {
+    width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .tab-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .console-wrap {
+    height: 400px;
+  }
+
+  .console-input-bar input {
+    font-size: 16px; /* prevent zoom */
+  }
+
+  .settings-toolbar {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .settings-toolbar > div {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .settings-tabs {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .stab-btn {
+    flex: 1;
+    text-align: center;
+  }
+
+  .save-btn {
+    width: 100%;
+  }
+
+  .pd-overview-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .pd-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .login-card {
+    padding: 20px;
+  }
+
+  .login-logo .icon {
+    width: 52px; height: 52px;
+    font-size: 24px;
+  }
+}
