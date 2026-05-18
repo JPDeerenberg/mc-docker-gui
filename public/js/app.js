@@ -63,7 +63,7 @@ function showView(name) {
     document.getElementById(id).classList.toggle('hidden', id !== `view-${name === 'login' ? 'login' : 'app'}`);
   });
   if (name !== 'login') {
-    ['page-dashboard', 'page-container', 'page-stats'].forEach(id => {
+    ['page-dashboard', 'page-container', 'page-stats', 'page-app-settings'].forEach(id => {
       document.getElementById(id).classList.toggle('hidden', id !== `page-${name}`);
     });
     const bc = document.getElementById('nav-breadcrumb');
@@ -124,10 +124,25 @@ async function doLogin() {
 }
 
 document.getElementById('logout-btn').addEventListener('click', () => {
-  state.token = null;
-  localStorage.removeItem('mcpanel_token');
-  closeWs();
-  showView('login');
+  if (state.isMobileApp) {
+    showView('app-settings');
+  } else {
+    state.token = null;
+    localStorage.removeItem('mcpanel_token');
+    closeWs();
+    showView('login');
+  }
+});
+
+document.getElementById('app-logout-btn').addEventListener('click', async () => {
+  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Preferences) {
+    await window.Capacitor.Plugins.Preferences.remove({ key: 'mcpanel_url' });
+    await window.Capacitor.Plugins.Preferences.remove({ key: 'mcpanel_user' });
+    await window.Capacitor.Plugins.Preferences.remove({ key: 'mcpanel_pass' });
+  }
+  
+  const origin = localStorage.getItem('capacitor_origin') || 'http://localhost';
+  window.location.href = origin;
 });
 
 // Auto-login from URL params (Android Wrapper support)
@@ -135,6 +150,18 @@ window.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
   const mcu = params.get('mcuser');
   const mcp = params.get('mcpass');
+  const isMobile = params.get('mobile');
+  const capOrigin = params.get('capacitor_origin');
+
+  if (isMobile || window.Capacitor) {
+    state.isMobileApp = true;
+    document.getElementById('logout-btn').textContent = 'App Settings';
+  }
+
+  if (capOrigin) {
+    localStorage.setItem('capacitor_origin', capOrigin);
+  }
+
   if (mcu && mcp) {
     // Clear URL to hide credentials
     window.history.replaceState({}, document.title, window.location.pathname);
@@ -1423,15 +1450,16 @@ function renderInvSlots(items, startSlot, endSlot, selectedSlot) {
 function renderSingleSlot(item, isSelected) {
   if (!item) return `<div class="pd-inv-slot${isSelected ? ' selected' : ''}"></div>`;
   
-  const itemUrl  = `/mc-textures/items/${item.id}.png`;
-  const blockUrl = `/mc-textures/blocks/${item.id}.png`;
-  const fallbackIcon = getItemIcon(item.id);
-  const formattedName = formatItemName(item.id);
+  const pureId = item.id.replace(/^minecraft:/, '');
+  const itemUrl  = `/mc-textures/items/${pureId}.png`;
+  const blockUrl = `/mc-textures/blocks/${pureId}.png`;
+  const fallbackIcon = getItemIcon(pureId);
+  const formattedName = formatItemName(pureId);
 
   return `<div class="pd-inv-slot has-item${isSelected ? ' selected' : ''}" title="${formattedName} x${item.count}">
     <span class="item-icon">
       <img src="${itemUrl}" 
-           alt="${escHtml(item.id)}"
+           alt="${escHtml(pureId)}"
            class="pd-item-img"
            onerror="if (!this.dataset.triedBlock) { this.dataset.triedBlock = 'true'; this.src = '${blockUrl}'; } else { this.replaceWith(document.createTextNode('${fallbackIcon}')); }" />
     </span>
