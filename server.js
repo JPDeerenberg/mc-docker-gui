@@ -20,11 +20,8 @@ const server = http.createServer(app);
 app.use(express.json({ limit: '1mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Serve bundled Minecraft item/block textures from minecraft-assets package
-const MC_ASSETS_VERSION = '26.1.2';
-const MC_ASSETS_BASE = path.join(__dirname, 'node_modules', 'minecraft-assets', 'minecraft-assets', 'data', MC_ASSETS_VERSION);
-app.use('/mc-textures/items',  express.static(path.join(MC_ASSETS_BASE, 'items'),  { maxAge: '7d' }));
-app.use('/mc-textures/blocks', express.static(path.join(MC_ASSETS_BASE, 'blocks'), { maxAge: '7d' }));
+
+
 
 // Mount API Routers
 app.use('/api', authRouter);

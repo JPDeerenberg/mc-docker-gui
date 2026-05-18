@@ -1447,12 +1447,14 @@ function renderInvSlots(items, startSlot, endSlot, selectedSlot) {
   return html;
 }
 
+const MC_TEX_CDN = 'https://cdn.jsdelivr.net/npm/minecraft-assets@1.17.0/minecraft-assets/data/1.21.4';
+
 function renderSingleSlot(item, isSelected) {
   if (!item) return `<div class="pd-inv-slot${isSelected ? ' selected' : ''}"></div>`;
   
   const pureId = item.id.replace(/^minecraft:/, '');
-  const itemUrl  = `/mc-textures/items/${pureId}.png`;
-  const blockUrl = `/mc-textures/blocks/${pureId}.png`;
+  const itemUrl  = `${MC_TEX_CDN}/items/${pureId}.png`;
+  const blockUrl = `${MC_TEX_CDN}/blocks/${pureId}.png`;
   const fallbackIcon = getItemIcon(pureId);
   const formattedName = formatItemName(pureId);
 
